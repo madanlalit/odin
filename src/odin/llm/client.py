@@ -32,9 +32,7 @@ class LLMClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "google/gemini-2.0-flash-001",
-        site_url: str = "https://github.com/odin-agent",
-        app_name: str = "Odin Agent",
+        model: str = "",
     ):
         """
         Initialize the LLM client.
@@ -44,8 +42,7 @@ class LLMClient:
                      OPENROUTER_API_KEY environment variable.
             model: Model identifier (e.g., "openai/gpt-4-vision-preview",
                    "anthropic/claude-3-opus", "google/gemini-pro-vision")
-            site_url: Your site URL for OpenRouter rankings.
-            app_name: Your app name for OpenRouter rankings.
+
         """
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not self.api_key:
@@ -55,8 +52,7 @@ class LLMClient:
             )
 
         self.model = model
-        self.site_url = site_url
-        self.app_name = app_name
+
         self._client = httpx.Client(timeout=120.0)
 
     def _encode_image(self, image: Image.Image) -> str:
@@ -90,9 +86,7 @@ class LLMClient:
         """
         image_base64 = self._encode_image(image)
 
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt}
-        ]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
         # Add conversation history if provided
         if history:
@@ -121,8 +115,6 @@ class LLMClient:
             self.OPENROUTER_API_URL,
             headers={
                 "Authorization": f"Bearer {self.api_key}",
-                "HTTP-Referer": self.site_url,
-                "X-Title": self.app_name,
                 "Content-Type": "application/json",
             },
             json={
