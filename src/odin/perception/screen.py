@@ -1,4 +1,4 @@
-import pyautogui
+import pyautogui  # type: ignore[import-untyped]
 
 class Screen:
     def __init__(self):
