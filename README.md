@@ -1,6 +1,14 @@
-# Odin 🔱
+<p align="center">
+  <img src="docs/assets/odin_logo.png" alt="Odin Logo" width="140">
+  <br>
+  <em>AI-powered computer automation agent using vision LLMs.</em>
+  <br><br>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
 
-AI-powered computer automation agent using vision LLMs.
+## Demo
+
+![Odin Demo](docs/assets/odin_demo.gif)
 
 ## Architecture
 
