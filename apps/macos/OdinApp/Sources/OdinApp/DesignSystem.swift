@@ -2,32 +2,34 @@ import SwiftUI
 import AppKit
 
 enum OdinStyle {
-    // Brand colors
-    static let accent = Color(red: 0.58, green: 0.38, blue: 0.98) // Electric violet
-    static let accentSecondary = Color(red: 0.20, green: 0.65, blue: 0.95) // Cool cyan
-    static let gold = Color(red: 0.95, green: 0.65, blue: 0.20) // Amber gold
+    // Brand colors from the warm palette
+    static let accent = Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange (#FF9644)
+    static let accentSecondary = Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange (#FFCE99)
+    static let gold = Color(red: 1.0, green: 0.808, blue: 0.60) // Warm gold (#FFCE99)
 
-    static let green = Color(red: 0.15, green: 0.82, blue: 0.52) // Emerald mint
-    static let red = Color(red: 0.95, green: 0.34, blue: 0.32) // Coral red
+    static let green = Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange (#FFCE99)
+    static let red = Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange (#FF9644)
 
-    // Backgrounds
-    static let background = Color(red: 0.05, green: 0.05, blue: 0.08)
+    // Deep espresso dark brown background (#0C0600)
+    static let background = Color(red: 0.05, green: 0.03, blue: 0.0)
 
-    // Typography Ink opacities
-    static let ink = Color.white.opacity(0.96)
-    static let secondaryInk = Color.white.opacity(0.74)
-    static let tertiaryInk = Color.white.opacity(0.48)
-    static let separator = Color.white.opacity(0.08)
+    // Warm Cream base (#FFFDF1)
+    static let warmCream = Color(red: 1.0, green: 0.992, blue: 0.945)
+
+    static let ink = warmCream.opacity(0.96)
+    static let secondaryInk = warmCream.opacity(0.74)
+    static let tertiaryInk = warmCream.opacity(0.48)
+    static let separator = warmCream.opacity(0.08)
 
     // Sizing
     static let panelRadius: CGFloat = 22
     static let cardRadius: CGFloat = 12
     static let chipRadius: CGFloat = 12
 
-    static let cardFill = Color.white.opacity(0.04)
-    static let cardFillHover = Color.white.opacity(0.08)
-    static let cardStroke = Color.white.opacity(0.08)
-    static let cardStrokeHover = Color.white.opacity(0.16)
+    static let cardFill = warmCream.opacity(0.04)
+    static let cardFillHover = warmCream.opacity(0.08)
+    static let cardStroke = warmCream.opacity(0.08)
+    static let cardStrokeHover = warmCream.opacity(0.16)
 
     static var brandGradient: LinearGradient {
         LinearGradient(
@@ -137,7 +139,7 @@ struct NotchSurface: ViewModifier {
         let borderGradient = LinearGradient(
             colors: isAccented ?
                 [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)] :
-                [Color.white.opacity(0.12), Color.white.opacity(0.03)],
+                [OdinStyle.warmCream.opacity(0.12), OdinStyle.warmCream.opacity(0.03)],
             startPoint: .top,
             endPoint: .bottom
         )
@@ -212,10 +214,10 @@ struct SoftButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(OdinStyle.secondaryInk)
-            .background(Color.white.opacity(0.04))
+            .background(OdinStyle.warmCream.opacity(0.04))
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    .strokeBorder(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(configuration.isPressed ? 0.86 : 1)
@@ -234,14 +236,14 @@ struct CustomGlassButtonStyle: ButtonStyle {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(isPrimary ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.03))
+                    .fill(isPrimary ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.03))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
                         isPrimary ?
                         LinearGradient(colors: [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)], startPoint: .top, endPoint: .bottom) :
-                        LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                        LinearGradient(colors: [OdinStyle.warmCream.opacity(0.12), OdinStyle.warmCream.opacity(0.04)], startPoint: .top, endPoint: .bottom),
                         lineWidth: 0.5
                     )
             )
@@ -251,11 +253,11 @@ struct CustomGlassButtonStyle: ButtonStyle {
 }
 
 extension ButtonStyle where Self == CustomGlassButtonStyle {
-    static func customGlass(cornerRadius: CGFloat = 8, isPrimary: Bool = false) -> CustomGlassButtonStyle {
-        CustomGlassButtonStyle(cornerRadius: cornerRadius, isPrimary: isPrimary)
-    }
-    static var customGlass: CustomGlassButtonStyle {
+    static var brandGlass: CustomGlassButtonStyle {
         CustomGlassButtonStyle(cornerRadius: 8, isPrimary: false)
+    }
+    static func brandGlass(cornerRadius: CGFloat, isPrimary: Bool = false) -> CustomGlassButtonStyle {
+        CustomGlassButtonStyle(cornerRadius: cornerRadius, isPrimary: isPrimary)
     }
 }
 

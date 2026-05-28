@@ -24,7 +24,7 @@ struct OnboardingView: View {
                     title: "Accessibility",
                     description: "So Odin can click, type, and read interface elements.",
                     symbol: "accessibility",
-                    iconColors: [OdinStyle.accentSecondary, Color(red: 0.15, green: 0.82, blue: 0.52)],
+                    iconColors: [OdinStyle.accentSecondary, OdinStyle.accent],
                     granted: permissions.hasAccessibility,
                     onAction: {
                         PermissionManager.requestAccessibility()
@@ -180,7 +180,7 @@ private struct PermissionRow: View {
                     Text("Grant")
                         .font(.system(size: 11.5, weight: .semibold))
                 }
-                .buttonStyle(.customGlass)
+                .buttonStyle(.brandGlass)
                 .controlSize(.regular)
             }
         }

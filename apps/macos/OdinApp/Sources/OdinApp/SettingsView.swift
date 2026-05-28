@@ -69,10 +69,10 @@ struct SettingsView: View {
 
     private func sidebarIconColor(for section: Section) -> Color {
         switch section {
-        case .general: return Color(red: 0.22, green: 0.64, blue: 0.95)
-        case .model: return Color(red: 0.95, green: 0.65, blue: 0.20)
-        case .permissions: return Color(red: 0.15, green: 0.82, blue: 0.52)
-        case .advanced: return Color(red: 0.94, green: 0.33, blue: 0.32)
+        case .general: return Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange
+        case .model: return Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange
+        case .permissions: return Color(red: 1.0, green: 0.992, blue: 0.945) // Warm Cream
+        case .advanced: return Color(red: 0.74, green: 0.44, blue: 0.12) // Warm Clay Brown
         }
     }
 
@@ -489,7 +489,7 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 4)
         }
-        .buttonStyle(.customGlass)
+        .buttonStyle(.brandGlass)
         .controlSize(.regular)
         .disabled(isDisabled)
     }
@@ -548,7 +548,7 @@ struct ShortcutRecorderView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .frame(minWidth: 160)
             }
-            .buttonStyle(.customGlass)
+            .buttonStyle(.brandGlass)
             .controlSize(.regular)
             
             if isRecording {
