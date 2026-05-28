@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck run build-app run-app clean help
+.PHONY: install dev test lint format typecheck run build-app run-app clean reset help
 
 help:
 	@echo "Available targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  build-app  - Build the macOS application"
 	@echo "  run-app    - Run the macOS application"
 	@echo "  clean      - Clean build artifacts and caches"
+	@echo "  reset      - Reset app data, keychain credentials, and macOS permissions"
 	@echo "  help       - Show this help message"
 
 install:
@@ -48,3 +49,18 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
+reset:
+	@echo "Resetting Odin app data, trace logs, and preferences..."
+	rm -rf .traces
+	rm -f ~/Library/Preferences/Odin.plist ~/Library/Preferences/odin.plist
+	killall cfprefsd 2>/dev/null || true
+	@echo "Deleting Keychain stored API keys and AWS credentials..."
+	security delete-generic-password -s odin.openrouter -a api-key 2>/dev/null || true
+	security delete-generic-password -s odin.bedrock -a api-key 2>/dev/null || true
+	security delete-generic-password -s odin.bedrock -a aws-access-key-id 2>/dev/null || true
+	security delete-generic-password -s odin.bedrock -a aws-secret-access-key 2>/dev/null || true
+	security delete-generic-password -s odin.bedrock -a aws-session-token 2>/dev/null || true
+	@echo "Resetting macOS permissions (Accessibility & Screen Recording)..."
+	tccutil reset Accessibility 2>/dev/null || true
+	tccutil reset ScreenCapture 2>/dev/null || true
+	@echo "Reset complete. Please restart the app and re-grant permissions."
