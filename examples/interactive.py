@@ -10,10 +10,6 @@ import os
 import sys
 
 from dotenv import load_dotenv
-
-# Load .env file
-load_dotenv()
-
 from odin import Agent, AgentConfig, create_client
 from odin.agent.parser import ParsedAction
 
@@ -24,16 +20,24 @@ def on_step(step: int, action: ParsedAction) -> None:
 
 
 def main():
-    # Check API key
-    if not os.environ.get("OPENROUTER_API_KEY"):
+    load_dotenv()
+
+    provider = os.environ.get("ODIN_LLM_PROVIDER", "openrouter")
+
+    if provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
         print("ERROR: Set OPENROUTER_API_KEY environment variable")
         sys.exit(1)
 
     print("🔱 Odin Interactive Agent")
     print("Type a task and press Enter. Type 'quit' to exit.\n")
 
-    llm = create_client()
-    config = AgentConfig(max_steps=30, use_grid=True)
+    try:
+        llm = create_client(provider=provider)
+    except (ImportError, ValueError) as e:
+        print(f"ERROR: {e}")
+        sys.exit(1)
+
+    config = AgentConfig()
     agent = Agent(llm, config=config, on_step=on_step)
 
     try:

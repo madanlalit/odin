@@ -27,19 +27,14 @@ class AgentMemory:
     Tracks conversation history, executed actions, and recent screenshots.
     """
 
-    # LLM conversation messages
     messages: list[dict[str, Any]] = field(default_factory=list)
 
-    # History of executed actions
     actions: list[ActionRecord] = field(default_factory=list)
 
-    # Recent screenshots (limited to save memory)
     screenshots: list[Image.Image] = field(default_factory=list)
 
-    # Maximum number of screenshots to keep
     max_screenshots: int = 5
 
-    # Maximum number of messages to keep (for context window)
     max_messages: int = 20
 
     def add_message(self, role: str, content: str | list):
@@ -52,9 +47,7 @@ class AgentMemory:
         """
         self.messages.append({"role": role, "content": content})
 
-        # Trim old messages if needed
         if len(self.messages) > self.max_messages:
-            # Keep system message if present, trim oldest user/assistant messages
             if self.messages and self.messages[0].get("role") == "system":
                 self.messages = [self.messages[0]] + self.messages[
                     -(self.max_messages - 1) :
@@ -90,7 +83,6 @@ class AgentMemory:
         """
         self.screenshots.append(image)
 
-        # Trim old screenshots
         if len(self.screenshots) > self.max_screenshots:
             self.screenshots = self.screenshots[-self.max_screenshots :]
 

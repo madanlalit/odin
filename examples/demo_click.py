@@ -16,14 +16,12 @@ def main():
     print("🔱 Odin Click Demo")
     print("-" * 40)
 
-    # Initialize
     screen = Screen()
     controller = ActionController()
 
     print(f"Screen size: {screen.width}x{screen.height}")
     print(f"Current mouse position: {controller.get_mouse_position()}")
 
-    # Move to center
     center_x = screen.width // 2
     center_y = screen.height // 2
 

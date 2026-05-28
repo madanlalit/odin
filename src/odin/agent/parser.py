@@ -5,17 +5,44 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from odin.action.keys import normalize_keys
+
 
 ActionType = Literal[
     "click",
     "double_click",
+    "double_click_element",
     "move",
     "type",
     "hotkey",
     "scroll",
+    "click_element",
+    "focus_element",
+    "press_element",
+    "scroll_element",
+    "set_text",
     "wait",
     "done",
 ]
+
+VALID_ACTIONS: tuple[str, ...] = (
+    "click",
+    "click_element",
+    "double_click",
+    "double_click_element",
+    "focus_element",
+    "move",
+    "press_element",
+    "type",
+    "set_text",
+    "hotkey",
+    "scroll",
+    "scroll_element",
+    "wait",
+    "done",
+)
+
+CONTROL_FIELDS: set[str] = {"action", "params", "thought"}
 
 
 @dataclass
@@ -60,35 +87,19 @@ def _extract_json_object(response: str) -> dict[str, Any]:
         raise ParseError(f"No JSON found in response: {response[:200]}")
 
     for parsed in parsed_objects:
-        if "action" in parsed:
+        if "actions" in parsed or "action" in parsed:
             return parsed
 
     return parsed_objects[0]
 
 
-def parse_llm_response(response: str) -> ParsedAction:
-    """
-    Parse the LLM response to extract the action.
-
-    The LLM is expected to return JSON in this format:
-    {
-        "thought": "reasoning about what to do",
-        "action": "action_name",
-        "params": { ... }
-    }
-
-    Args:
-        response: Raw LLM response text
-
-    Returns:
-        ParsedAction with extracted action details
-
-    Raises:
-        ParseError: If the response cannot be parsed
-    """
-    data = _extract_json_object(response)
-
-    # Validate required fields
+def _parse_action_object(
+    data: dict[str, Any],
+    *,
+    raw_response: str,
+    parent_thought: str = "",
+) -> ParsedAction:
+    """Parse one action object into a ParsedAction."""
     if "action" not in data:
         raise ParseError("Missing 'action' field in response")
 
@@ -97,30 +108,84 @@ def parse_llm_response(response: str) -> ParsedAction:
         raise ParseError("Field 'action' must be a string")
 
     action = action_value.lower()
-    valid_actions = [
-        "click",
-        "double_click",
-        "move",
-        "type",
-        "hotkey",
-        "scroll",
-        "wait",
-        "done",
-    ]
 
-    if action not in valid_actions:
-        raise ParseError(f"Unknown action: {action}. Valid: {valid_actions}")
+    if action not in VALID_ACTIONS:
+        raise ParseError(f"Unknown action: {action}. Valid: {list(VALID_ACTIONS)}")
 
     params = data.get("params", {})
     if not isinstance(params, dict):
         raise ParseError("Field 'params' must be an object")
+    params = params.copy()
+    for key, value in data.items():
+        if key not in CONTROL_FIELDS and key not in params:
+            params[key] = value
+
+    element_actions = {
+        "click_element",
+        "double_click_element",
+        "focus_element",
+        "press_element",
+        "scroll_element",
+        "set_text",
+    }
+    if action in element_actions and "element_id" not in params and "id" in params:
+        params["element_id"] = params["id"]
+    if action == "hotkey" and isinstance(params.get("keys"), list):
+        keys = params["keys"]
+        if all(isinstance(key, str) for key in keys):
+            params["keys"] = normalize_keys(keys)
 
     return ParsedAction(
-        thought=str(data.get("thought", "")),
+        thought=str(data.get("thought", parent_thought)),
         action=action,  # type: ignore
         params=params,
-        raw_response=response,
+        raw_response=raw_response,
     )
+
+
+def parse_llm_actions(
+    response: str,
+    *,
+    max_actions: int = 5,
+) -> list[ParsedAction]:
+    """
+    Parse the batch-only LLM action response.
+
+    Responses must use:
+    {
+        "thought": "short reasoning",
+        "actions": [
+            {"action": "hotkey", "params": {"keys": ["command", "l"]}},
+            {"action": "type", "params": {"text": "example.com"}}
+        ]
+    }
+    """
+    data = _extract_json_object(response)
+    if "actions" not in data:
+        raise ParseError("Missing 'actions' field in response")
+
+    actions = data["actions"]
+    if not isinstance(actions, list):
+        raise ParseError("Field 'actions' must be a list")
+    if not actions:
+        raise ParseError("Field 'actions' must contain at least one action")
+    if len(actions) > max_actions:
+        raise ParseError(f"Too many actions: {len(actions)} > {max_actions}")
+
+    parent_thought = str(data.get("thought", ""))
+    parsed_actions: list[ParsedAction] = []
+    for index, item in enumerate(actions, start=1):
+        if not isinstance(item, dict):
+            raise ParseError(f"Action #{index} must be an object")
+        parsed_actions.append(
+            _parse_action_object(
+                item,
+                raw_response=response,
+                parent_thought=parent_thought,
+            )
+        )
+
+    return parsed_actions
 
 
 def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
@@ -135,11 +200,17 @@ def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
     """
     required_params: dict[str, list[str]] = {
         "click": ["x", "y"],
+        "click_element": ["element_id"],
         "double_click": ["x", "y"],
+        "double_click_element": ["element_id"],
+        "focus_element": ["element_id"],
         "move": ["x", "y"],
+        "press_element": ["element_id"],
         "type": ["text"],
+        "set_text": ["element_id", "text"],
         "hotkey": ["keys"],
         "scroll": ["direction"],
+        "scroll_element": ["element_id", "direction"],
         "wait": ["seconds"],
         "done": ["result"],
     }
@@ -150,7 +221,6 @@ def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
         if param not in action.params:
             return False, f"Missing required parameter '{param}' for {action.action}"
 
-    # Type-specific validation
     if action.action in ("click", "double_click", "move"):
         x = action.params.get("x")
         y = action.params.get("y")
@@ -161,8 +231,16 @@ def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
         keys = action.params.get("keys")
         if not isinstance(keys, list):
             return False, "Keys must be a list"
+        if not all(isinstance(key, str) for key in keys):
+            return False, "Keys must be a list of strings"
+        action.params["keys"] = normalize_keys(keys)
 
     if action.action == "scroll":
+        direction = action.params.get("direction", "").lower()
+        if direction not in ("up", "down", "left", "right"):
+            return False, "Direction must be 'up', 'down', 'left', or 'right'"
+
+    if action.action == "scroll_element":
         direction = action.params.get("direction", "").lower()
         if direction not in ("up", "down", "left", "right"):
             return False, "Direction must be 'up', 'down', 'left', or 'right'"
