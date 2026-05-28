@@ -79,7 +79,14 @@ struct OnboardingView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 520)
-        .glassSurface(cornerRadius: OdinStyle.panelRadius)
+        .background(
+            NotchShape(cornerRadius: OdinStyle.panelRadius)
+                .fill(OdinStyle.background)
+        )
+        .overlay(
+            NotchBorder(cornerRadius: OdinStyle.panelRadius)
+                .stroke(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.7)
+        )
         .onAppear { permissions.startPolling() }
         .onDisappear { permissions.stopPolling() }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: permissions.allGranted)
@@ -91,21 +98,21 @@ struct OnboardingView: View {
         VStack(spacing: 14) {
             ZStack {
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [OdinStyle.accent.opacity(0.18), Color.clear],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 48
-                        )
-                    )
+                    .fill(OdinStyle.accent.opacity(0.08))
                     .frame(width: 96, height: 96)
 
                 Image(systemName: "sparkles")
                     .font(.system(size: 26, weight: .medium))
-                    .foregroundStyle(OdinStyle.brandGradient)
+                    .foregroundStyle(OdinStyle.accent)
                     .frame(width: 72, height: 72)
-                    .glassEffect(.regular, in: .circle)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.04))
+                    )
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                    )
             }
 
             VStack(spacing: 4) {
@@ -145,11 +152,7 @@ private struct PermissionRow: View {
 
                 Image(systemName: granted ? "checkmark" : symbol)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(
-                        granted ?
-                        LinearGradient(colors: [OdinStyle.green, OdinStyle.green.opacity(0.7)], startPoint: .top, endPoint: .bottom) :
-                        LinearGradient(colors: iconColors, startPoint: .top, endPoint: .bottom)
-                    )
+                    .foregroundStyle(granted ? OdinStyle.green : OdinStyle.accentSecondary)
             }
 
             VStack(alignment: .leading, spacing: 2) {

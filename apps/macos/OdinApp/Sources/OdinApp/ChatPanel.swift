@@ -443,7 +443,7 @@ private struct OdinMark: View {
             if isActive {
                 Circle()
                     .stroke(
-                        OdinStyle.brandGradient,
+                        OdinStyle.accent,
                         lineWidth: 1
                     )
                     .frame(width: size * 1.3, height: size * 1.3)
@@ -457,10 +457,7 @@ private struct OdinMark: View {
                 
                 Circle()
                     .stroke(
-                        AngularGradient(
-                            colors: [OdinStyle.accent, OdinStyle.accentSecondary, OdinStyle.accent.opacity(0.2)],
-                            center: .center
-                        ),
+                        OdinStyle.accent.opacity(0.6),
                         style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 6])
                     )
                     .frame(width: size, height: size)
@@ -473,7 +470,7 @@ private struct OdinMark: View {
             }
             
             Circle()
-                .fill(isActive ? OdinStyle.brandGradient : LinearGradient(colors: [OdinStyle.accent.opacity(0.85), OdinStyle.accentSecondary.opacity(0.85)], startPoint: .top, endPoint: .bottom))
+                .fill(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.8))
                 .frame(width: size * 0.45, height: size * 0.45)
                 .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 4)
         }
@@ -493,17 +490,7 @@ private struct ProgressHairline: View {
             ZStack(alignment: .leading) {
                 Rectangle().fill(Color.clear)
                 Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                OdinStyle.gold.opacity(0.55),
-                                OdinStyle.gold,
-                                OdinStyle.gold.opacity(0.30)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(OdinStyle.gold)
                     .frame(width: geo.size.width * fraction)
             }
         }

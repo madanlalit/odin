@@ -57,13 +57,50 @@ final class AppSettings: ObservableObject {
     @Published var hotkeyModifiers: Int {
         didSet { save() }
     }
+    @Published var customEnv: String {
+        didSet { save() }
+    }
     @Published var recentTasks: [String] = []
     @Published var pinnedTasks: [String] = []
 
     private let defaults = UserDefaults.standard
+    private var cachedAPIKeys: [Provider: String] = [:]
+
+    static let modelAliases: [String: String] = [
+        "google/gemini-2.0-flash-001": "Gemini 2.0 Flash",
+        "anthropic/claude-opus-4.7": "Claude 4.7 Opus",
+        "anthropic/claude-sonnet-4.6": "Claude 4.6 Sonnet",
+        "us.anthropic.claude-opus-4-7": "Claude 4.7 Opus",
+        "us.anthropic.claude-sonnet-4-6": "Claude 4.6 Sonnet",
+        "us.anthropic.claude-haiku-4-5": "Claude 4.5 Haiku",
+        "deepseek/deepseek-v4-pro": "DeepSeek v4 Pro",
+        "google/gemini-2.0-flash": "Gemini 2.0 Flash",
+        "anthropic/claude-3-5-sonnet": "Claude 3.5 Sonnet",
+        "anthropic/claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet"
+    ]
 
     var modelLabel: String {
-        effectiveModel
+        modelAlias
+    }
+
+    var modelAlias: String {
+        alias(for: effectiveModel)
+    }
+
+    func alias(for modelID: String) -> String {
+        let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+        if let mapped = Self.modelAliases[trimmed] {
+            return mapped
+        }
+        let lastComponent = trimmed.split(separator: "/").last ?? ""
+        let cleaned = lastComponent
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: ":", with: " ")
+        return cleaned.capitalized
     }
 
     var effectiveModel: String {
@@ -100,6 +137,7 @@ final class AppSettings: ObservableObject {
         requireActionApproval = defaults.object(forKey: "requireActionApproval") as? Bool ?? true
         hotkeyKeyCode = defaults.object(forKey: "hotkeyKeyCode") as? Int ?? 49
         hotkeyModifiers = defaults.object(forKey: "hotkeyModifiers") as? Int ?? Int(NSEvent.ModifierFlags.option.rawValue)
+        customEnv = defaults.string(forKey: "customEnv") ?? ""
         recentTasks = defaults.stringArray(forKey: "recentTasks") ?? []
         pinnedTasks = defaults.stringArray(forKey: "pinnedTasks") ?? []
     }
@@ -133,7 +171,12 @@ final class AppSettings: ObservableObject {
     }
 
     func apiKey() -> String {
-        KeychainStore.shared.read(service: "odin.\(provider.rawValue)", account: "api-key") ?? ""
+        if let cached = cachedAPIKeys[provider] {
+            return cached
+        }
+        let key = KeychainStore.shared.read(service: "odin.\(provider.rawValue)", account: "api-key") ?? ""
+        cachedAPIKeys[provider] = key
+        return key
     }
 
     func setAPIKey(_ value: String) {
@@ -141,8 +184,10 @@ final class AppSettings: ObservableObject {
         let service = "odin.\(provider.rawValue)"
         if trimmed.isEmpty {
             KeychainStore.shared.delete(service: service, account: "api-key")
+            cachedAPIKeys[provider] = ""
         } else {
             KeychainStore.shared.write(trimmed, service: service, account: "api-key")
+            cachedAPIKeys[provider] = trimmed
         }
     }
 
@@ -164,11 +209,99 @@ final class AppSettings: ObservableObject {
         env["AWS_REGION_NAME"] = awsRegion
 
         let key = apiKey()
-        if provider == .openrouter, !key.isEmpty {
-            env["OPENROUTER_API_KEY"] = key
+        if !key.isEmpty {
+            if provider == .openrouter {
+                env["OPENROUTER_API_KEY"] = key
+            } else if provider == .bedrock {
+                env["BEDROCK_API_KEY"] = key
+            }
+        }
+
+        // AWS Bedrock Credentials
+        let awsAccessKeyId = self.awsAccessKeyId()
+        let awsSecretKey = self.awsSecretAccessKey()
+        let awsSessionToken = self.awsSessionToken()
+
+        if !awsAccessKeyId.isEmpty { env["AWS_ACCESS_KEY_ID"] = awsAccessKeyId }
+        if !awsSecretKey.isEmpty { env["AWS_SECRET_ACCESS_KEY"] = awsSecretKey }
+        if !awsSessionToken.isEmpty { env["AWS_SESSION_TOKEN"] = awsSessionToken }
+
+        // Parse custom environment variables
+        let lines = customEnv.split(separator: "\n")
+        for line in lines {
+            let parts = line.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 {
+                let k = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                let v = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !k.isEmpty {
+                    env[k] = v
+                }
+            }
         }
 
         return env
+    }
+
+    func awsAccessKeyId() -> String {
+        KeychainStore.shared.read(service: "odin.bedrock", account: "aws-access-key-id") ?? ""
+    }
+
+    func setAwsAccessKeyId(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.shared.delete(service: "odin.bedrock", account: "aws-access-key-id")
+        } else {
+            KeychainStore.shared.write(trimmed, service: "odin.bedrock", account: "aws-access-key-id")
+        }
+    }
+
+    func awsSecretAccessKey() -> String {
+        KeychainStore.shared.read(service: "odin.bedrock", account: "aws-secret-access-key") ?? ""
+    }
+
+    func setAwsSecretAccessKey(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.shared.delete(service: "odin.bedrock", account: "aws-secret-access-key")
+        } else {
+            KeychainStore.shared.write(trimmed, service: "odin.bedrock", account: "aws-secret-access-key")
+        }
+    }
+
+    func awsSessionToken() -> String {
+        KeychainStore.shared.read(service: "odin.bedrock", account: "aws-session-token") ?? ""
+    }
+
+    func setAwsSessionToken(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            KeychainStore.shared.delete(service: "odin.bedrock", account: "aws-session-token")
+        } else {
+            KeychainStore.shared.write(trimmed, service: "odin.bedrock", account: "aws-session-token")
+        }
+    }
+
+    struct ModelSuggestion: Identifiable {
+        var id: String { modelID }
+        let modelID: String
+        let alias: String
+    }
+
+    var suggestedModels: [ModelSuggestion] {
+        switch provider {
+        case .openrouter:
+            return [
+                ModelSuggestion(modelID: "google/gemini-2.0-flash-001", alias: "Gemini 2.0 Flash"),
+                ModelSuggestion(modelID: "anthropic/claude-opus-4.7", alias: "Claude 4.7 Opus"),
+                ModelSuggestion(modelID: "anthropic/claude-sonnet-4.6", alias: "Claude 4.6 Sonnet")
+            ]
+        case .bedrock:
+            return [
+                ModelSuggestion(modelID: "us.anthropic.claude-opus-4-7", alias: "Claude 4.7 Opus"),
+                ModelSuggestion(modelID: "us.anthropic.claude-sonnet-4-6", alias: "Claude 4.6 Sonnet"),
+                ModelSuggestion(modelID: "us.anthropic.claude-haiku-4-5", alias: "Claude 4.5 Haiku")
+            ]
+        }
     }
 
     private func save() {
@@ -183,6 +316,7 @@ final class AppSettings: ObservableObject {
         defaults.set(requireActionApproval, forKey: "requireActionApproval")
         defaults.set(hotkeyKeyCode, forKey: "hotkeyKeyCode")
         defaults.set(hotkeyModifiers, forKey: "hotkeyModifiers")
+        defaults.set(customEnv, forKey: "customEnv")
     }
 
     private static func defaultRepoPath() -> String {

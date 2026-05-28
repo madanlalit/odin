@@ -31,12 +31,8 @@ enum OdinStyle {
     static let cardStroke = warmCream.opacity(0.08)
     static let cardStrokeHover = warmCream.opacity(0.16)
 
-    static var brandGradient: LinearGradient {
-        LinearGradient(
-            colors: [accent, accentSecondary],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    static var brandGradient: Color {
+        accent
     }
 }
 
@@ -136,13 +132,9 @@ struct NotchSurface: ViewModifier {
     var isIdle: Bool = false
 
     func body(content: Content) -> some View {
-        let borderGradient = LinearGradient(
-            colors: isAccented ?
-                [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)] :
-                [OdinStyle.warmCream.opacity(0.12), OdinStyle.warmCream.opacity(0.03)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        let borderColor = isAccented ?
+            OdinStyle.accent.opacity(0.3) :
+            OdinStyle.warmCream.opacity(0.08)
         let strokeWidth: CGFloat = isIdle ? 1.2 : 0.7
 
         return content
@@ -153,7 +145,7 @@ struct NotchSurface: ViewModifier {
             .glassEffect(.regular, in: NotchShape(cornerRadius: cornerRadius))
             .overlay(
                 NotchBorder(cornerRadius: cornerRadius)
-                    .stroke(borderGradient, lineWidth: strokeWidth)
+                    .stroke(borderColor, lineWidth: strokeWidth)
             )
     }
 }
@@ -236,14 +228,14 @@ struct CustomGlassButtonStyle: ButtonStyle {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(isPrimary ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.03))
+                    .fill(isPrimary ? OdinStyle.accent : OdinStyle.warmCream.opacity(0.06))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
                         isPrimary ?
-                        LinearGradient(colors: [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)], startPoint: .top, endPoint: .bottom) :
-                        LinearGradient(colors: [OdinStyle.warmCream.opacity(0.12), OdinStyle.warmCream.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                        OdinStyle.accent :
+                        OdinStyle.warmCream.opacity(0.12),
                         lineWidth: 0.5
                     )
             )

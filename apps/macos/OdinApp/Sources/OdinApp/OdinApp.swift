@@ -12,6 +12,7 @@ struct OdinDesktopApp: App {
                 .environmentObject(appDelegate.settings)
                 .environmentObject(appDelegate.runner)
         }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView()

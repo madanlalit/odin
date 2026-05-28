@@ -5,81 +5,64 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var permissions: PermissionManager
     @State private var apiKey = ""
+    @State private var awsAccessKeyId = ""
+    @State private var awsSecretKey = ""
+    @State private var awsSessionToken = ""
     @State private var savedFlash = false
-    @State private var selection: Section = .general
-
-    enum Section: String, CaseIterable, Identifiable {
-        case general, model, permissions, advanced
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .general: return "General"
-            case .model: return "Model"
-            case .permissions: return "Permissions"
-            case .advanced: return "Advanced"
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .general: return "gearshape"
-            case .model: return "cpu"
-            case .permissions: return "lock.shield"
-            case .advanced: return "slider.horizontal.3"
-            }
-        }
-    }
+    @State private var savedAwsCredentials = false
 
     var body: some View {
-        NavigationSplitView {
-            List(Section.allCases, selection: $selection) { section in
-                HStack(spacing: 8) {
-                    Image(systemName: section.symbol)
-                        .foregroundStyle(sidebarIconColor(for: section))
-                        .frame(width: 16, height: 16)
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .tag(section)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                Text("Odin Settings")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(OdinStyle.ink)
+                    .padding(.bottom, -8)
+
+                generalPane
+                modelPane
+                permissionsPane
+                advancedPane
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 168, ideal: 180, max: 220)
-        } detail: {
-            ScrollView {
-                Group {
-                    switch selection {
-                    case .general: generalPane
-                    case .model: modelPane
-                    case .permissions: permissionsPane
-                    case .advanced: advancedPane
-                    }
-                }
-                .padding(28)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(minWidth: 480)
+            .padding(24)
         }
-        .frame(width: 760, height: 520)
+        .frame(width: 520, height: 600)
         .preferredColorScheme(.dark)
-        .onAppear { apiKey = settings.apiKey() }
-        .onChange(of: settings.provider) { _, _ in apiKey = settings.apiKey() }
-    }
-
-    private func sidebarIconColor(for section: Section) -> Color {
-        switch section {
-        case .general: return Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange
-        case .model: return Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange
-        case .permissions: return Color(red: 1.0, green: 0.992, blue: 0.945) // Warm Cream
-        case .advanced: return Color(red: 0.74, green: 0.44, blue: 0.12) // Warm Clay Brown
+        .onAppear {
+            apiKey = settings.apiKey()
+            awsAccessKeyId = settings.awsAccessKeyId()
+            awsSecretKey = settings.awsSecretAccessKey()
+            awsSessionToken = settings.awsSessionToken()
+            permissions.startPolling()
+        }
+        .onDisappear {
+            permissions.stopPolling()
+        }
+        .onChange(of: settings.provider) { _, _ in
+            apiKey = settings.apiKey()
+            awsAccessKeyId = settings.awsAccessKeyId()
+            awsSecretKey = settings.awsSecretAccessKey()
+            awsSessionToken = settings.awsSessionToken()
         }
     }
 
+    private func settingsSectionHeader(title: String, subtitle: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(OdinStyle.accent)
+            if let subtitle {
+                Text(subtitle)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(OdinStyle.secondaryInk)
+            }
+        }
+        .padding(.bottom, 2)
+    }
 
     private var generalPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            paneHeader(
+        VStack(alignment: .leading, spacing: 12) {
+            settingsSectionHeader(
                 title: "General",
                 subtitle: "Provider, credentials, and how Odin connects to your model."
             )
@@ -93,25 +76,67 @@ struct SettingsView: View {
 
                 rowDivider
 
-                if settings.provider == .openrouter {
-                    HStack(spacing: 12) {
-                        rowLabel("API Key")
-                        SecureField("sk-or-…", text: $apiKey)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit(saveKey)
-                        primaryActionButton(
-                            title: savedFlash ? "Saved" : "Save",
-                            isDisabled: apiKey.isEmpty,
-                            action: saveKey
-                        )
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                } else {
+                HStack(spacing: 12) {
+                    rowLabel("API Key")
+                    SecureField(settings.provider == .openrouter ? "sk-or-…" : "API Key / Token", text: $apiKey)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(saveKey)
+                    primaryActionButton(
+                        title: savedFlash ? "Saved" : "Save",
+                        isDisabled: apiKey.isEmpty,
+                        action: saveKey
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+                if settings.provider == .bedrock {
+                    rowDivider
+
                     HStack(spacing: 12) {
                         rowLabel("AWS Region")
                         TextField("us-east-1", text: $settings.awsRegion)
                             .textFieldStyle(.roundedBorder)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+
+                    rowDivider
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("AWS CREDENTIALS (KEYCHAIN)")
+                            .font(.system(size: 9.5, weight: .bold))
+                            .foregroundStyle(OdinStyle.tertiaryInk)
+                            .tracking(0.8)
+                            .padding(.top, 4)
+
+                        HStack(spacing: 12) {
+                            rowLabel("Access Key ID")
+                            SecureField("AWS_ACCESS_KEY_ID", text: $awsAccessKeyId)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        HStack(spacing: 12) {
+                            rowLabel("Secret Key")
+                            SecureField("AWS_SECRET_ACCESS_KEY", text: $awsSecretKey)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        HStack(spacing: 12) {
+                            rowLabel("Session Token")
+                            SecureField("AWS_SESSION_TOKEN (Optional)", text: $awsSessionToken)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        HStack {
+                            Spacer()
+                            primaryActionButton(
+                                title: savedAwsCredentials ? "Saved" : "Save AWS Credentials",
+                                isDisabled: awsAccessKeyId.isEmpty && awsSecretKey.isEmpty,
+                                action: saveAwsCredentialsAction
+                            )
+                        }
+                        .padding(.top, 4)
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -123,7 +148,7 @@ struct SettingsView: View {
                     rowLabel("Status")
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(credentialsConfigured ? OdinStyle.green : OdinStyle.tertiaryInk)
+                            .fill(credentialsConfigured ? OdinStyle.accent : OdinStyle.tertiaryInk)
                             .frame(width: 7, height: 7)
                         Text(credentialsConfigured ? "Ready" : "Needs configuration")
                             .font(.system(size: 12))
@@ -139,21 +164,22 @@ struct SettingsView: View {
                 ShortcutRecorderView()
             }
 
-            footnote("Keys are stored securely in macOS Keychain.")
+            footnote("Keys and secrets are stored securely in macOS Keychain.")
         }
     }
 
     private var credentialsConfigured: Bool {
         switch settings.provider {
-        case .openrouter: return !settings.apiKey().isEmpty
-        case .bedrock: return !settings.awsRegion.isEmpty
+        case .openrouter:
+            return !settings.apiKey().isEmpty
+        case .bedrock:
+            return !settings.awsRegion.isEmpty && (!settings.awsAccessKeyId().isEmpty || !settings.apiKey().isEmpty)
         }
     }
 
-
     private var modelPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            paneHeader(
+        VStack(alignment: .leading, spacing: 12) {
+            settingsSectionHeader(
                 title: "Model",
                 subtitle: "Pick the vision-capable model Odin uses to reason about the screen."
             )
@@ -171,36 +197,51 @@ struct SettingsView: View {
 
                 HStack(spacing: 12) {
                     rowLabel("Effective")
-                    Text(settings.effectiveModel)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(OdinStyle.secondaryInk)
-                        .textSelection(.enabled)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(settings.modelAlias)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(OdinStyle.ink)
+                        Text(settings.effectiveModel)
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .textSelection(.enabled)
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                sectionHeader("Suggested")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SUGGESTED MODELS")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(OdinStyle.tertiaryInk)
+                    .tracking(0.8)
+                    .padding(.top, 4)
+                
                 VStack(spacing: 6) {
-                    ForEach(suggestedModels, id: \.self) { model in
-                        suggestedModelRow(model)
+                    ForEach(settings.suggestedModels) { suggestion in
+                        suggestedModelRow(suggestion)
                     }
                 }
             }
         }
     }
 
-    private func suggestedModelRow(_ model: String) -> some View {
-        let isSelected = settings.effectiveModel == model
+    private func suggestedModelRow(_ suggestion: AppSettings.ModelSuggestion) -> some View {
+        let isSelected = settings.effectiveModel == suggestion.modelID
         return Button {
-            settings.model = model
+            settings.model = suggestion.modelID
         } label: {
             HStack(spacing: 10) {
-                Text(model)
-                    .font(.system(size: 12.5, design: .monospaced))
-                    .foregroundStyle(isSelected ? OdinStyle.ink : OdinStyle.secondaryInk)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(suggestion.alias)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(isSelected ? OdinStyle.ink : OdinStyle.secondaryInk)
+                    Text(suggestion.modelID)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(OdinStyle.tertiaryInk)
+                }
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark")
@@ -210,8 +251,14 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 9))
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isSelected ? OdinStyle.accent.opacity(0.12) : OdinStyle.cardFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(isSelected ? OdinStyle.accent.opacity(0.3) : OdinStyle.cardStroke, lineWidth: 0.5)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -224,27 +271,9 @@ struct SettingsView: View {
         }
     }
 
-    private var suggestedModels: [String] {
-        switch settings.provider {
-        case .openrouter:
-            return [
-                "google/gemini-2.0-flash-001",
-                "anthropic/claude-opus-4.7",
-                "anthropic/claude-sonnet-4.6",
-            ]
-        case .bedrock:
-            return [
-                "us.anthropic.claude-opus-4-7",
-                "us.anthropic.claude-sonnet-4-6",
-                "us.anthropic.claude-haiku-4-5",
-            ]
-        }
-    }
-
-
     private var permissionsPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            paneHeader(
+        VStack(alignment: .leading, spacing: 12) {
+            settingsSectionHeader(
                 title: "Permissions",
                 subtitle: "Odin needs to see your screen and control your Mac to operate."
             )
@@ -269,8 +298,6 @@ struct SettingsView: View {
 
             footnote("Granting permissions opens System Settings. Status updates automatically once you toggle them on.")
         }
-        .onAppear { permissions.startPolling() }
-        .onDisappear { permissions.stopPolling() }
     }
 
     private func permissionRow(
@@ -283,9 +310,16 @@ struct SettingsView: View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: granted ? "checkmark" : "exclamationmark")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(granted ? OdinStyle.green : OdinStyle.tertiaryInk)
+                .foregroundStyle(granted ? OdinStyle.accent : OdinStyle.tertiaryInk)
                 .frame(width: 30, height: 30)
-                .glassEffect(.regular, in: .circle)
+                .background(
+                    Circle()
+                        .fill(granted ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.04))
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(granted ? OdinStyle.accent.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 0.5)
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -301,10 +335,17 @@ struct SettingsView: View {
             if granted {
                 Text("Granted")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(OdinStyle.green)
+                    .foregroundStyle(OdinStyle.accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .glassEffect(.regular, in: .capsule)
+                    .background(
+                        Capsule()
+                            .fill(OdinStyle.accent.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(OdinStyle.accent.opacity(0.3), lineWidth: 0.5)
+                    )
             } else {
                 primaryActionButton(title: "Grant", isDisabled: false) {
                     onGrant(); onSettings()
@@ -315,10 +356,9 @@ struct SettingsView: View {
         .padding(.vertical, 14)
     }
 
-
     private var advancedPane: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            paneHeader(
+        VStack(alignment: .leading, spacing: 12) {
+            settingsSectionHeader(
                 title: "Advanced",
                 subtitle: "Limits, safety, and tracing for power users."
             )
@@ -331,8 +371,12 @@ struct SettingsView: View {
                 rowToggle(label: "Confirm every action", isOn: $settings.requireActionApproval)
             }
 
-            VStack(alignment: .leading, spacing: 10) {
-                sectionHeader("Tracing")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("TRACING")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(OdinStyle.tertiaryInk)
+                    .tracking(0.8)
+                    .padding(.top, 4)
 
                 groupCard {
                     HStack(spacing: 12) {
@@ -355,6 +399,31 @@ struct SettingsView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CUSTOM ENVIRONMENT VARIABLES")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(OdinStyle.tertiaryInk)
+                    .tracking(0.8)
+                    .padding(.top, 4)
+
+                groupCard {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Add custom environment variables (e.g. KEY=VALUE), one per line:")
+                            .font(.system(size: 11))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                        TextEditor(text: $settings.customEnv)
+                            .font(.system(size: 11, design: .monospaced))
+                            .frame(height: 80)
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    }
+                    .padding(16)
+                }
+            }
+
             HStack {
                 Spacer()
                 Text("Odin · v0.6.0")
@@ -364,26 +433,6 @@ struct SettingsView: View {
             }
             .padding(.top, 8)
         }
-    }
-
-
-    private func paneHeader(title: String, subtitle: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(OdinStyle.ink)
-            Text(subtitle)
-                .font(.system(size: 12.5))
-                .foregroundStyle(OdinStyle.secondaryInk)
-        }
-        .padding(.bottom, 4)
-    }
-
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.system(size: 10.5, weight: .semibold))
-            .foregroundStyle(OdinStyle.tertiaryInk)
-            .tracking(0.8)
     }
 
     private func footnote(_ text: String) -> some View {
@@ -410,7 +459,6 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
             )
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     private var rowDivider: some View {
@@ -449,16 +497,15 @@ struct SettingsView: View {
         HStack(spacing: 12) {
             Text(label)
                 .font(.system(size: 12.5, weight: .medium))
-                .frame(width: 200, alignment: .leading)
                 .foregroundStyle(OdinStyle.secondaryInk)
             Spacer()
-            Stepper(value: value, in: range) {
-                Text("\(value.wrappedValue)")
-                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(OdinStyle.ink)
-                    .frame(width: 48, alignment: .trailing)
-            }
-            .labelsHidden()
+            Text("\(value.wrappedValue)")
+                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(OdinStyle.ink)
+                .frame(width: 48, alignment: .trailing)
+            Stepper("", value: value, in: range)
+                .labelsHidden()
+                .frame(width: 50)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -510,6 +557,20 @@ struct SettingsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 savedFlash = false
+            }
+        }
+    }
+
+    private func saveAwsCredentialsAction() {
+        settings.setAwsAccessKeyId(awsAccessKeyId)
+        settings.setAwsSecretAccessKey(awsSecretKey)
+        settings.setAwsSessionToken(awsSessionToken)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            savedAwsCredentials = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                savedAwsCredentials = false
             }
         }
     }
