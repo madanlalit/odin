@@ -1,0 +1,1061 @@
+import SwiftUI
+import AppKit
+
+struct ChatPanel: View {
+    @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var runner: AgentRunner
+
+    @State private var task = ""
+    @State private var hint = ""
+    @State private var mode: PillMode = .idle
+    @State private var showTrace = false
+    @State private var edgeHoverTask: Task<Void, Never>?
+    @State private var isPointerOverVisiblePill = false
+    @FocusState private var inputFocused: Bool
+
+    enum PillMode {
+        case idle
+        case hover
+        case live
+        case open
+    }
+
+    static let morph = Animation.spring(response: 0.38, dampingFraction: 0.82)
+    static let popOut = Animation.spring(response: 0.30, dampingFraction: 0.68)
+
+    private var notchPopTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity
+                .combined(with: .offset(y: -10))
+                .combined(with: .scale(scale: 0.82, anchor: .top)),
+            removal: .opacity
+                .combined(with: .offset(y: -8))
+                .combined(with: .scale(scale: 0.92, anchor: .top))
+        )
+    }
+
+    private var resolvedMode: PillMode {
+        if mode == .open { return .open }
+        if runner.pendingApproval != nil { return .open }
+        if runner.isRunning { return .live }
+        if runner.lastResult != nil && (mode == .idle || mode == .hover) {
+            return .live
+        }
+        return mode
+    }
+
+    private var pillWidth: CGFloat {
+        switch resolvedMode {
+        case .idle: return OdinNotchMetrics.restingWidth()
+        case .hover: return OdinNotchMetrics.hoverWidth()
+        case .live: return 420
+        case .open: return 540
+        }
+    }
+
+    var body: some View {
+        Group {
+            if resolvedMode == .idle {
+                idlePill
+                    .frame(width: pillWidth, alignment: .top)
+            } else {
+                GlassEffectContainer(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        switch resolvedMode {
+                        case .idle:
+                            EmptyView()
+                        case .hover:
+                            hoverPill
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        case .live:
+                            livePill
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        case .open:
+                            openPill
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                    .frame(width: pillWidth, alignment: .top)
+                    .scaleEffect(
+                        x: resolvedMode == .hover ? 1.02 : 1,
+                        y: resolvedMode == .hover ? 1.06 : 1,
+                        anchor: .top
+                    )
+                    .notchSurface(
+                        cornerRadius: OdinStyle.panelRadius,
+                        isAccented: runner.isRunning || runner.pendingApproval != nil,
+                        isIdle: false
+                    )
+                }
+                .transition(notchPopTransition)
+            }
+        }
+        .onHover { hovering in
+            isPointerOverVisiblePill = hovering
+            withAnimation(Self.morph) {
+                if hovering {
+                    if mode == .idle { mode = .hover }
+                } else {
+                    if mode == .hover { mode = .idle }
+                    if mode == .open
+                        && task.isEmpty
+                        && hint.isEmpty
+                        && !runner.isRunning
+                        && runner.pendingApproval == nil {
+                        inputFocused = false
+                        mode = .idle
+                    }
+                }
+            }
+        }
+        .animation(Self.morph, value: resolvedMode)
+        .animation(Self.morph, value: pillWidth)
+        .animation(Self.morph, value: showTrace)
+        .animation(Self.morph, value: runner.messages.count)
+        .animation(Self.morph, value: runner.isRunning)
+        .animation(Self.morph, value: runner.pendingApproval != nil)
+        .animation(Self.popOut, value: resolvedMode == .hover)
+        .onChange(of: runner.isRunning) { _, _ in
+            if !runner.isRunning && mode == .open {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    inputFocused = true
+                }
+            }
+        }
+        .onChange(of: runner.pendingApproval != nil) { _, hasApproval in
+            if hasApproval { mode = .open }
+        }
+        .onAppear {
+            mode = .idle
+            startEdgeHoverPolling()
+            let runnerRef = runner
+            TakeoverMonitor.shared.enable {
+                if runnerRef.isRunning {
+                    runnerRef.stop()
+                }
+            }
+        }
+        .onDisappear {
+            stopEdgeHoverPolling()
+            TakeoverMonitor.shared.disable()
+        }
+    }
+
+    private var idlePill: some View {
+        Color.clear
+            .frame(height: OdinNotchMetrics.restingHeight)
+            .contentShape(Rectangle())
+    }
+
+    private var hoverPill: some View {
+        Button {
+            openChatPanel()
+        } label: {
+            HStack(spacing: 8) {
+                Text("Odin")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(OdinStyle.ink)
+                Text("·")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(OdinStyle.tertiaryInk)
+                if let last = runner.lastResult {
+                    Text(last.level == .success ? "Done" : "Stopped")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                } else {
+                    Text("Ready")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                }
+                Spacer(minLength: 6)
+                Circle()
+                    .fill(OdinStyle.accent)
+                    .frame(width: 5, height: 5)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 36)
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .frame(width: pillWidth, height: 36)
+        .contentShape(Rectangle())
+    }
+
+    private var livePill: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                OdinMark(isActive: runner.isRunning, size: 18)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(liveTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(OdinStyle.ink)
+                        .lineLimit(1)
+                    Text(liveSubtitle)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                if runner.isRunning {
+                    Button {
+                        runner.stop()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .frame(width: 22, height: 22)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Stop")
+                } else {
+                    Button {
+                        mode = .idle
+                        runner.clear()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .frame(width: 22, height: 22)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Dismiss")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                mode = .open
+            }
+
+            if runner.isRunning {
+                ProgressHairline(fraction: progressFraction)
+            }
+        }
+    }
+
+    private var openPill: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            inputRegion
+
+            if let approval = runner.pendingApproval {
+                Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
+                ApprovalRegion(
+                    approval: approval,
+                    allow: { runner.respondToPendingApproval(approved: true) },
+                    skip: { runner.respondToPendingApproval(approved: false) },
+                    stop: { runner.stop() }
+                )
+            } else if runner.isRunning {
+                Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
+                ProgressHairline(fraction: progressFraction)
+                    .padding(.top, -1)
+            }
+
+            if !pinnedAndRecents.isEmpty && !runner.isRunning {
+                Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
+                recentsRow
+            }
+
+            if showTrace && !runner.messages.isEmpty {
+                Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
+                TraceTimeline(messages: runner.messages, progress: runner.progress)
+                    .frame(maxHeight: 360)
+            }
+
+            if !runner.messages.isEmpty {
+                expandHandle
+            }
+        }
+    }
+
+    private var inputRegion: some View {
+        HStack(alignment: .center, spacing: 12) {
+            OdinMark(
+                isActive: runner.isRunning || runner.pendingApproval != nil,
+                size: 18
+            )
+
+            inputContent
+
+            Spacer(minLength: 8)
+
+            trailingControls
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, runner.isRunning ? 10 : 12)
+    }
+
+    @ViewBuilder
+    private var inputContent: some View {
+        if runner.isRunning {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(liveTitle)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(OdinStyle.ink)
+                    .lineLimit(1)
+                steerField
+            }
+        } else if let approval = runner.pendingApproval {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Approval needed")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(OdinStyle.ink)
+                Text(approval.actionTitle)
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(OdinStyle.secondaryInk)
+                    .lineLimit(1)
+            }
+        } else {
+            taskField
+        }
+    }
+
+    private var taskField: some View {
+        ZStack(alignment: .leading) {
+            if task.isEmpty && !inputFocused {
+                HStack(spacing: 8) {
+                    BlinkingCaret(height: 16)
+                    Text("What should I do?")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(OdinStyle.tertiaryInk)
+                }
+                .allowsHitTesting(false)
+            }
+            TextField("", text: $task)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(OdinStyle.ink)
+                .tint(OdinStyle.accent)
+                .focused($inputFocused)
+                .onSubmit(submitTask)
+        }
+        .frame(height: 24)
+        .contentShape(Rectangle())
+        .onTapGesture { inputFocused = true }
+    }
+
+    private var steerField: some View {
+        ZStack(alignment: .leading) {
+            if hint.isEmpty {
+                HStack(spacing: 6) {
+                    BlinkingCaret(height: 11)
+                    Text("Steer Odin…")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(OdinStyle.tertiaryInk)
+                }
+                .allowsHitTesting(false)
+            }
+            TextField("", text: $hint)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .regular))
+                .foregroundStyle(OdinStyle.secondaryInk)
+                .tint(OdinStyle.accent)
+                .onSubmit(submitSteeringHint)
+        }
+        .frame(height: 16)
+    }
+
+    private var trailingControls: some View {
+        HStack(spacing: 8) {
+            costChip
+            modelChip
+            primaryButton
+        }
+    }
+
+    @ViewBuilder
+    private var costChip: some View {
+        if let cost = runner.progress.costUSD, cost > 0 {
+            Text(String(format: "$%.3f", cost))
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(OdinStyle.tertiaryInk)
+                .softChip()
+        }
+    }
+
+    private var modelChip: some View {
+        Menu {
+            Picker("Provider", selection: $settings.provider) {
+                ForEach(Provider.allCases) { Text($0.displayName).tag($0) }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Circle().fill(OdinStyle.gold).frame(width: 5, height: 5)
+                Text(shortModelLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(OdinStyle.secondaryInk)
+                    .lineLimit(1)
+            }
+            .softChip()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var primaryButton: some View {
+        if runner.isRunning {
+            Button {
+                if hint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    runner.stop()
+                } else {
+                    submitSteeringHint()
+                }
+            } label: {
+                Image(systemName: hint.isEmpty ? "stop.fill" : "arrow.up")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(hint.isEmpty ? OdinStyle.red : OdinStyle.ink)
+                    .frame(width: 26, height: 26)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .help(hint.isEmpty ? "Stop run" : "Send hint")
+        } else {
+            Button(action: submitTask) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(task.isEmpty ? OdinStyle.tertiaryInk : OdinStyle.ink)
+                    .frame(width: 26, height: 26)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled(task.isEmpty)
+            .help("Run")
+        }
+    }
+
+    private var pinnedAndRecents: [String] {
+        let pinned = settings.pinnedTasks
+        let recent = settings.recentTasks.filter { !pinned.contains($0) }
+        return pinned + recent
+    }
+
+    private var recentsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(pinnedAndRecents, id: \.self) { item in
+                    RecentChip(
+                        text: item,
+                        pinned: settings.isPinned(item),
+                        onTap: {
+                            task = item
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) {
+                                submitTask()
+                            }
+                        },
+                        onPinToggle: {
+                            settings.togglePinned(item)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .frame(height: 44)
+    }
+
+    private var expandHandle: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                showTrace.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: showTrace ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                Text(showTrace ? "Hide trace" : "\(runner.messages.count) steps")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .foregroundStyle(OdinStyle.tertiaryInk)
+            .padding(.horizontal, 10)
+            .frame(height: 18)
+            .background(Capsule().fill(OdinStyle.cardFill))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+    }
+
+    private var liveTitle: String {
+        let current = runner.currentTask?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let current, !current.isEmpty { return current }
+        if let last = runner.lastResult {
+            switch last.level {
+            case .success: return "Done"
+            case .warning: return "Stopped"
+            case .error: return "Needs attention"
+            case .info: return "Idle"
+            }
+        }
+        return "Working…"
+    }
+
+    private var liveSubtitle: String {
+        if runner.isRunning {
+            if let action = runner.progress.currentAction {
+                return "\(runner.progress.phaseTitle) \(action)"
+            }
+            if let detail = runner.progress.phaseDetail, !detail.isEmpty {
+                return detail
+            }
+            return runner.progress.phaseTitle
+        }
+        if let last = runner.lastResult {
+            let steps = max(runner.progress.actionsExecuted, 0)
+            let stepLabel = steps == 1 ? "1 step" : "\(steps) steps"
+            if let detail = last.detail, !detail.isEmpty {
+                return "\(detail) · \(stepLabel)"
+            }
+            return "Done · \(stepLabel)"
+        }
+        return ""
+    }
+
+    private var progressFraction: CGFloat {
+        guard runner.isRunning else { return 0 }
+        let base: CGFloat
+        if runner.progress.maxSteps > 0, runner.progress.step > 0 {
+            base = CGFloat(runner.progress.step) / CGFloat(runner.progress.maxSteps)
+        } else {
+            base = 0.16
+        }
+        return min(max(base + 0.12, 0.18), 0.94)
+    }
+
+    private var shortModelLabel: String {
+        let model = settings.modelLabel
+        if model.contains("opus") { return "opus-4-7" }
+        if model.contains("sonnet") { return "sonnet-4-6" }
+        if model.contains("haiku") { return "haiku-4-5" }
+        if model.contains("gemini") { return "gemini-2.0" }
+        if model.count <= 14 { return model }
+        return String(model.prefix(14))
+    }
+
+    private func startEdgeHoverPolling() {
+        guard edgeHoverTask == nil else { return }
+        edgeHoverTask = Task { @MainActor in
+            while !Task.isCancelled {
+                updateEdgeHoverState()
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
+    }
+
+    private func stopEdgeHoverPolling() {
+        edgeHoverTask?.cancel()
+        edgeHoverTask = nil
+    }
+
+    private func updateEdgeHoverState() {
+        guard !runner.isRunning, runner.pendingApproval == nil else { return }
+        guard mode == .idle || mode == .hover else { return }
+
+        let location = NSEvent.mouseLocation
+        let screen = OdinNotchMetrics.screenContaining(location)
+        let isInActivationZone = OdinNotchMetrics.activationRect(on: screen).contains(location)
+
+        if isInActivationZone, mode == .idle {
+            withAnimation(Self.morph) { mode = .hover }
+        } else if !isInActivationZone, mode == .hover, !isPointerOverVisiblePill {
+            withAnimation(Self.morph) { mode = .idle }
+        }
+    }
+
+    private func openChatPanel() {
+        withAnimation(Self.morph) { mode = .open }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            inputFocused = true
+        }
+    }
+
+    private func submitTask() {
+        let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        runner.run(task: trimmed, settings: settings)
+        settings.addRecentTask(trimmed)
+        task = ""
+        showTrace = false
+    }
+
+    private func submitSteeringHint() {
+        let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        runner.steer(hint: trimmed)
+        hint = ""
+    }
+}
+
+private struct BlinkingCaret: View {
+    var height: CGFloat = 16
+    @State private var visible = true
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1, style: .continuous)
+            .fill(OdinStyle.accent)
+            .frame(width: 2, height: height)
+            .opacity(visible ? 1 : 0)
+            .onAppear {
+                withAnimation(
+                    .easeInOut(duration: 0.55)
+                    .repeatForever(autoreverses: true)
+                ) {
+                    visible = false
+                }
+            }
+    }
+}
+
+private struct OdinMark: View {
+    let isActive: Bool
+    var size: CGFloat = 18
+    @State private var breath: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            if isActive {
+                Circle()
+                    .fill(OdinStyle.accent.opacity(0.22))
+                    .frame(width: size, height: size)
+                    .scaleEffect(breath)
+                    .animation(
+                        .easeInOut(duration: 1.4).repeatForever(autoreverses: true),
+                        value: breath
+                    )
+            }
+            Circle()
+                .fill(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.85))
+                .frame(width: size * 0.45, height: size * 0.45)
+        }
+        .frame(width: size, height: size)
+        .onAppear { if isActive { breath = 1.18 } }
+        .onChange(of: isActive) { _, new in
+            breath = new ? 1.18 : 1
+        }
+    }
+}
+
+private struct ProgressHairline: View {
+    let fraction: CGFloat
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color.clear)
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                OdinStyle.gold.opacity(0.55),
+                                OdinStyle.gold,
+                                OdinStyle.gold.opacity(0.30)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geo.size.width * fraction)
+            }
+        }
+        .frame(height: 1.5)
+    }
+}
+
+private struct RecentChip: View {
+    let text: String
+    let pinned: Bool
+    let onTap: () -> Void
+    let onPinToggle: () -> Void
+    @State private var hovering = false
+
+    private var displayText: String {
+        if text.count <= 28 { return text }
+        return String(text.prefix(26)) + "…"
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if pinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(OdinStyle.gold)
+            }
+            Text(displayText)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(OdinStyle.secondaryInk)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 24)
+        .background(
+            Capsule().fill(hovering ? OdinStyle.cardFillHover : OdinStyle.cardFill)
+        )
+        .overlay(
+            Capsule().strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
+        )
+        .onHover { hovering = $0 }
+        .contentShape(Capsule())
+        .onTapGesture(perform: onTap)
+        .contextMenu {
+            Button(pinned ? "Unpin" : "Pin", action: onPinToggle)
+        }
+        .help(text)
+    }
+}
+
+private struct TraceTimeline: View {
+    let messages: [RunnerMessage]
+    let progress: RunnerProgress
+
+    private var visibleMessages: [RunnerMessage] {
+        Array(messages.suffix(20))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { index, message in
+                            TraceRow(
+                                message: message,
+                                isFirst: index == 0,
+                                isLast: index == visibleMessages.count - 1,
+                                isCurrent: index == visibleMessages.count - 1
+                            )
+                            .id(message.id)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                }
+                .onChange(of: messages.count) { _, _ in
+                    if let last = visibleMessages.last {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+
+            footerStrip
+        }
+    }
+
+    private var footerStrip: some View {
+        HStack(spacing: 14) {
+            progressFooterItem(elapsedLabel)
+            progressFooterItem("\(progress.actionsExecuted) steps")
+            if let cost = progress.costUSD, cost > 0 {
+                progressFooterItem(String(format: "$%.3f", cost))
+            } else if progress.requests > 0 {
+                progressFooterItem("\(progress.requests) calls")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 10)
+        .background(Rectangle().fill(Color.white.opacity(0.025)))
+        .overlay(
+            Rectangle().fill(OdinStyle.separator).frame(height: 0.5),
+            alignment: .top
+        )
+    }
+
+    private func progressFooterItem(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .regular, design: .monospaced))
+            .foregroundStyle(OdinStyle.tertiaryInk)
+    }
+
+    private var elapsedLabel: String {
+        guard let first = messages.first else { return "0s" }
+        let seconds = max(0, Int(Date().timeIntervalSince(first.timestamp)))
+        if seconds < 60 { return "\(seconds)s" }
+        return "\(seconds / 60)m \(seconds % 60)s"
+    }
+}
+
+private struct TraceRow: View {
+    let message: RunnerMessage
+    let isFirst: Bool
+    let isLast: Bool
+    let isCurrent: Bool
+
+    @State private var isExpanded = false
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            timelineRail
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(displayTitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(OdinStyle.ink)
+                    if let target = inlineTarget {
+                        Text(target)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if hasDetail {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(OdinStyle.tertiaryInk)
+                    }
+                }
+                if isExpanded, let detail = message.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(OdinStyle.cardFill)
+                        )
+                        .padding(.top, 2)
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 6)
+        .background(
+            Rectangle().fill(isHovering ? Color.white.opacity(0.03) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .onTapGesture {
+            guard hasDetail else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                isExpanded.toggle()
+            }
+        }
+    }
+
+    private var timelineRail: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(OdinStyle.separator)
+                .frame(width: 1, height: 8)
+                .opacity(isFirst ? 0 : 1)
+            ZStack {
+                Circle().fill(dotFill).frame(width: 10, height: 10)
+                if isCurrent {
+                    Circle()
+                        .strokeBorder(OdinStyle.gold.opacity(0.35), lineWidth: 3)
+                        .frame(width: 16, height: 16)
+                }
+                Image(systemName: dotIcon)
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            Rectangle()
+                .fill(OdinStyle.separator)
+                .frame(width: 1)
+                .frame(maxHeight: .infinity)
+                .opacity(isLast ? 0 : 1)
+        }
+        .frame(width: 16)
+    }
+
+    private var dotFill: Color {
+        switch message.level {
+        case .success: return OdinStyle.green
+        case .warning: return OdinStyle.gold
+        case .error: return OdinStyle.red
+        case .info: return isCurrent ? OdinStyle.gold : OdinStyle.secondaryInk
+        }
+    }
+
+    private var dotIcon: String {
+        switch message.level {
+        case .success: return "checkmark"
+        case .warning: return "exclamationmark"
+        case .error: return "xmark"
+        case .info: return "circle.fill"
+        }
+    }
+
+    private var hasDetail: Bool {
+        guard let d = message.detail else { return false }
+        return !d.isEmpty
+    }
+
+    private var displayTitle: String {
+        if message.title == "Task" { return "Request" }
+        if message.title == "Hint" { return "Hint" }
+        if message.title.hasPrefix("Step ") && message.title.hasSuffix(" plan") {
+            return "Plan"
+        }
+        return Self.formatActionTitle(message.title)
+    }
+
+    private var inlineTarget: String? {
+        guard let detail = message.detail, !detail.isEmpty else { return nil }
+        if message.title == "Task" || message.title == "Hint" {
+            if detail.count > 56 { return String(detail.prefix(54)) + "…" }
+            return detail
+        }
+        let firstLine = detail.split(separator: "\n").first.map(String.init) ?? detail
+        if firstLine.count > 48 { return String(firstLine.prefix(46)) + "…" }
+        return firstLine
+    }
+
+    static func formatActionTitle(_ title: String) -> String {
+        switch title {
+        case "click", "click_element": return "Click"
+        case "double_click", "double_click_element": return "Double click"
+        case "press_element": return "Press"
+        case "focus_element": return "Focus"
+        case "set_text": return "Set text"
+        case "type": return "Type"
+        case "hotkey": return "Shortcut"
+        case "scroll", "scroll_element": return "Scroll"
+        case "move": return "Move"
+        default:
+            return title.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+}
+
+private struct ApprovalRegion: View {
+    let approval: PendingActionApproval
+    let allow: () -> Void
+    let skip: () -> Void
+    let stop: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(OdinStyle.cardFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
+                        )
+                        .frame(width: 28, height: 28)
+                    Image(systemName: actionSymbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(OdinStyle.ink)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Odin wants to \(approvalSentence)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(OdinStyle.ink)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(approvalContext)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+
+            if let thought = approval.thought, !thought.isEmpty {
+                Text(thought)
+                    .font(.system(size: 11.5, weight: .regular))
+                    .foregroundStyle(OdinStyle.secondaryInk)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(OdinStyle.cardFill)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
+                    )
+            }
+
+            if !approval.detailChips.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(approval.detailChips, id: \.self) { chip in
+                        Text(chip)
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .softChip(height: 20)
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                Button(action: stop) {
+                    Text("Stop run")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 88, height: 28)
+                }
+                .buttonStyle(SoftButtonStyle())
+
+                Spacer()
+
+                Button(action: skip) {
+                    Text("Skip step")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 92, height: 28)
+                }
+                .buttonStyle(SoftButtonStyle())
+                .keyboardShortcut(.escape, modifiers: [])
+
+                Button(action: allow) {
+                    Text("Allow")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 96, height: 28)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .keyboardShortcut(.return, modifiers: [])
+            }
+        }
+        .padding(16)
+    }
+
+    private var actionSymbol: String {
+        switch approval.action {
+        case "click", "click_element", "press_element": return "cursorarrow.click.2"
+        case "double_click", "double_click_element": return "cursorarrow.click.badge.clock"
+        case "type", "set_text": return "keyboard"
+        case "hotkey": return "command"
+        case "scroll", "scroll_element": return "arrow.up.arrow.down"
+        default: return "exclamationmark.triangle"
+        }
+    }
+
+    private var approvalSentence: String {
+        let title = approval.actionTitle
+        guard let first = title.first else { return "perform an action" }
+        return first.lowercased() + title.dropFirst()
+    }
+
+    private var approvalContext: String {
+        let subtitle = approval.actionSubtitle ?? "Current app"
+        return "\(subtitle) · Step \(approval.batchIndex) of \(approval.batchCount)"
+    }
+}
+
+extension RunnerMessage.Level {
+    var color: Color {
+        switch self {
+        case .info: return OdinStyle.gold
+        case .success: return OdinStyle.green
+        case .warning: return OdinStyle.gold
+        case .error: return OdinStyle.red
+        }
+    }
+}
