@@ -14,3 +14,11 @@ wheels/
 .env
 .env.*
 !.env.example
+
+# Tools & Caches
+.ruff_cache/
+.vscode/
+
+# Swift build artifacts
+.build/
+
