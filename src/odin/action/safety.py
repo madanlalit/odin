@@ -3,23 +3,21 @@
 import time
 from dataclasses import dataclass, field
 
-import pyautogui  # type: ignore[import-untyped]
+from pydantic import BaseModel
+
+from odin.action.keys import normalize_keys
+from odin.platform.macos import MacOSBackend
 
 
-@dataclass
-class SafetyConfig:
+class SafetyConfig(BaseModel):
     """Configuration for safety limits."""
 
-    # Maximum actions per minute
     max_actions_per_minute: int = 60
 
-    # Minimum delay between actions (seconds)
     min_action_delay: float = 0.1
 
-    # Whether to require confirmation for dangerous actions
     require_confirmation: bool = False
 
-    # Screen bounds margin (pixels from edge)
     bounds_margin: int = 10
 
 
@@ -36,7 +34,7 @@ class SafetyController:
     _last_action_time: float = 0.0
 
     def __post_init__(self):
-        self.screen_width, self.screen_height = pyautogui.size()
+        self.screen_width, self.screen_height = MacOSBackend.screen_size()
 
     def validate_coordinates(self, x: int, y: int) -> tuple[bool, str | None]:
         """
@@ -68,14 +66,11 @@ class SafetyController:
         """
         current_time = time.time()
 
-        # Clean up old action times (older than 1 minute)
         self._action_times = [t for t in self._action_times if current_time - t < 60]
 
-        # Check actions per minute limit
         if len(self._action_times) >= self.config.max_actions_per_minute:
             return False, "Rate limit exceeded: too many actions per minute"
 
-        # Check minimum delay
         if current_time - self._last_action_time < self.config.min_action_delay:
             return False, "Minimum delay between actions not met"
 
@@ -102,12 +97,10 @@ class SafetyController:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # Check rate limit
         allowed, error = self.check_rate_limit()
         if not allowed:
             return False, error
 
-        # Validate coordinates for position-based actions
         if action in ("click", "double_click", "move"):
             x = params.get("x", 0)
             y = params.get("y", 0)
@@ -115,7 +108,6 @@ class SafetyController:
             if not valid:
                 return False, error
 
-        # Validate drag coordinates
         if action == "drag":
             for coord_pair in [("start_x", "start_y"), ("end_x", "end_y")]:
                 x = params.get(coord_pair[0], 0)
@@ -145,12 +137,12 @@ class SafetyController:
         if action == "hotkey":
             keys = params.get("keys", [])
             dangerous_combos = [
-                {"command", "q"},  # Quit app
-                {"command", "delete"},  # Delete
-                {"command", "shift", "delete"},  # Empty trash
-                {"control", "alt", "delete"},  # System interrupt
+                {"command", "q"},
+                {"command", "delete"},
+                {"command", "shift", "delete"},
+                {"ctrl", "alt", "delete"},
             ]
-            key_set = set(k.lower() for k in keys)
+            key_set = set(normalize_keys(keys)) if isinstance(keys, list) else set()
             for combo in dangerous_combos:
                 if combo.issubset(key_set):
                     return True

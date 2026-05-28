@@ -1,18 +1,15 @@
-"""Action controller for GUI automation using pyautogui."""
+"""Action controller for GUI automation using macOS Quartz backend."""
 
 import time
-from dataclasses import dataclass
 from typing import Literal
 
-import pyautogui  # type: ignore[import-untyped]
+from pydantic import BaseModel
 
-# Configure pyautogui safety features
-pyautogui.FAILSAFE = True  # Move mouse to corner to abort
-pyautogui.PAUSE = 0.1  # Small pause between actions
+from odin.action.keys import normalize_keys
+from odin.platform.macos import MacOSBackend
 
 
-@dataclass
-class ActionResult:
+class ActionResult(BaseModel):
     """Result of an executed action."""
 
     success: bool
@@ -23,7 +20,7 @@ class ActionResult:
 
 class ActionController:
     """
-    Controller for executing GUI actions using pyautogui.
+    Controller for executing GUI actions via the macOS Quartz backend.
 
     Provides methods for mouse movements, clicks, keyboard input,
     and other UI interactions.
@@ -31,7 +28,8 @@ class ActionController:
 
     def __init__(self):
         """Initialize the action controller."""
-        self.screen_width, self.screen_height = pyautogui.size()
+        self._backend = MacOSBackend()
+        self.screen_width, self.screen_height = self._backend.screen_size()
 
     def _validate_coordinates(self, x: int, y: int) -> bool:
         """Check if coordinates are within screen bounds."""
@@ -62,7 +60,7 @@ class ActionController:
             )
 
         try:
-            pyautogui.click(x, y, button=button)
+            self._backend.click(x, y, button=button)
             return ActionResult(
                 success=True,
                 action="click",
@@ -90,7 +88,7 @@ class ActionController:
             )
 
         try:
-            pyautogui.doubleClick(x, y)
+            self._backend.double_click(x, y)
             return ActionResult(
                 success=True,
                 action="double_click",
@@ -132,7 +130,7 @@ class ActionController:
             )
 
         try:
-            pyautogui.moveTo(x, y, duration=duration)
+            self._backend.move(x, y)
             return ActionResult(
                 success=True,
                 action="move",
@@ -176,10 +174,9 @@ class ActionController:
             )
 
         try:
-            pyautogui.moveTo(start_x, start_y)
-            pyautogui.drag(
-                end_x - start_x,
-                end_y - start_y,
+            self._backend.drag(
+                start_x, start_y,
+                end_x, end_y,
                 duration=duration,
             )
             return ActionResult(
@@ -202,7 +199,7 @@ class ActionController:
             ActionResult indicating success or failure
         """
         try:
-            pyautogui.write(text, interval=interval)
+            self._backend.type_text(text)
             return ActionResult(
                 success=True,
                 action="type",
@@ -221,12 +218,13 @@ class ActionController:
         Returns:
             ActionResult indicating success or failure
         """
+        normalized_keys = normalize_keys(keys)
         try:
-            pyautogui.hotkey(*keys)
+            self._backend.hotkey(*normalized_keys)
             return ActionResult(
                 success=True,
                 action="hotkey",
-                message=f"Pressed: {'+'.join(keys)}",
+                message=f"Pressed: {'+'.join(normalized_keys)}",
             )
         except Exception as e:
             return ActionResult(success=False, action="hotkey", error=str(e))
@@ -251,22 +249,12 @@ class ActionController:
             ActionResult indicating success or failure
         """
         try:
-            # Determine scroll amount based on direction
-            if direction == "up":
-                scroll_amount = clicks
-            elif direction == "down":
-                scroll_amount = -clicks
-            else:
-                # Horizontal scrolling (if supported)
-                scroll_amount = clicks if direction == "right" else -clicks
-                pyautogui.hscroll(scroll_amount, x=x, y=y)
-                return ActionResult(
-                    success=True,
-                    action="scroll",
-                    message=f"Scrolled {direction} by {clicks}",
-                )
-
-            pyautogui.scroll(scroll_amount, x=x, y=y)
+            self._backend.scroll(
+                direction=direction,
+                clicks=clicks,
+                x=x,
+                y=y,
+            )
             return ActionResult(
                 success=True,
                 action="scroll",
@@ -292,6 +280,34 @@ class ActionController:
             message=f"Waited {seconds} seconds",
         )
 
+    def undo(self, times: int = 1) -> ActionResult:
+        """
+        Send Cmd+Z to undo recent actions.
+
+        Args:
+            times: Number of undo steps
+
+        Returns:
+            ActionResult indicating success or failure
+        """
+        try:
+            self._backend.undo(times=times)
+            return ActionResult(
+                success=True,
+                action="undo",
+                message=f"Undo ×{times}",
+            )
+        except Exception as e:
+            return ActionResult(success=False, action="undo", error=str(e))
+
+    def save_clipboard(self) -> list[tuple]:
+        """Snapshot the current clipboard contents for later restoration."""
+        return self._backend.clipboard_save()
+
+    def restore_clipboard(self, items: list[tuple]) -> None:
+        """Restore previously saved clipboard contents."""
+        self._backend.clipboard_restore(items)
+
     def get_mouse_position(self) -> tuple[int, int]:
         """Get the current mouse position."""
-        return pyautogui.position()
+        return self._backend.mouse_position()
