@@ -1,30 +1,23 @@
-"""LLM Client for OpenRouter API with vision support."""
+"""OpenRouter LLM client with vision support."""
 
 import base64
 import os
-from dataclasses import dataclass
+from importlib import import_module
 from io import BytesIO
 from typing import Any
 
-import httpx
 from PIL import Image
 
-
-@dataclass
-class LLMResponse:
-    """Response from the LLM."""
-
-    content: str
-    reasoning: str | None = None
-    usage: dict[str, int] | None = None
+from odin.llm.base import DEFAULT_OPENROUTER_MODEL, LLMResponse
+from odin.llm.context import format_screen_context
 
 
-class LLMClient:
+class OpenRouterLLMClient:
     """
     OpenRouter-based LLM client with vision capabilities.
 
-    Uses OpenRouter to access various vision-capable models like
-    GPT-4 Vision, Claude 3, Gemini Pro Vision, etc.
+    The httpx dependency is optional. Install it with the OpenRouter extra
+    before constructing this client without an injected HTTP client.
     """
 
     OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -32,17 +25,17 @@ class LLMClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "",
+        model: str = DEFAULT_OPENROUTER_MODEL,
+        client: Any | None = None,
     ):
         """
-        Initialize the LLM client.
+        Initialize the OpenRouter client.
 
         Args:
             api_key: OpenRouter API key. If not provided, reads from
                      OPENROUTER_API_KEY environment variable.
-            model: Model identifier (e.g., "openai/gpt-4-vision-preview",
-                   "anthropic/claude-3-opus", "google/gemini-pro-vision")
-
+            model: OpenRouter model identifier.
+            client: Optional injected HTTP client, primarily for tests.
         """
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")
         if not self.api_key:
@@ -52,13 +45,23 @@ class LLMClient:
             )
 
         self.model = model
+        self._client = client or self._load_httpx().Client(timeout=120.0)
 
-        self._client = httpx.Client(timeout=120.0)
+    @staticmethod
+    def _load_httpx() -> Any:
+        """Load httpx only when OpenRouter support is used."""
+        try:
+            return import_module("httpx")
+        except ImportError as exc:
+            raise ImportError(
+                "OpenRouter support requires the optional OpenRouter dependency. "
+                "Install it with `pip install 'odin[openrouter]'` or "
+                "`uv sync --extra openrouter`."
+            ) from exc
 
     def _encode_image(self, image: Image.Image) -> str:
         """Encode a PIL Image to base64 string."""
         buffer = BytesIO()
-        # Convert to RGB if necessary (e.g., RGBA screenshots)
         if image.mode in ("RGBA", "P"):
             image = image.convert("RGB")
         image.save(buffer, format="JPEG", quality=85)
@@ -71,9 +74,10 @@ class LLMClient:
         task: str,
         system_prompt: str,
         history: list[dict[str, Any]] | None = None,
+        screen_context: dict[str, Any] | None = None,
     ) -> LLMResponse:
         """
-        Analyze a screenshot and determine the next action.
+        Analyze a screenshot and determine the next action batch.
 
         Args:
             image: PIL Image of the current screen state.
@@ -82,24 +86,32 @@ class LLMClient:
             history: Previous conversation history (optional).
 
         Returns:
-            LLMResponse with the model's analysis and suggested action.
+            LLMResponse with the model's analysis and suggested action batch.
         """
         image_base64 = self._encode_image(image)
 
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
-        # Add conversation history if provided
         if history:
             messages.extend(history)
 
-        # Add current message with screenshot
+        user_text = (
+            f"Current task: {task}\n\n"
+            "Analyze the screenshot and determine the next action batch."
+        )
+        if screen_context:
+            user_text += (
+                "\n\nScreen context:\n"
+                f"{format_screen_context(screen_context)}"
+            )
+
         messages.append(
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": f"Current task: {task}\n\nAnalyze the screenshot and determine the next action.",
+                        "text": user_text,
                     },
                     {
                         "type": "image_url",
@@ -135,7 +147,7 @@ class LLMClient:
             usage=data.get("usage"),
         )
 
-    def close(self):
+    def close(self) -> None:
         """Close the HTTP client."""
         self._client.close()
 
@@ -144,20 +156,3 @@ class LLMClient:
 
     def __exit__(self, *args):
         self.close()
-
-
-def create_client(
-    api_key: str | None = None,
-    model: str = "google/gemini-2.0-flash-001",
-) -> LLMClient:
-    """
-    Factory function to create an LLM client.
-
-    Args:
-        api_key: OpenRouter API key (or set OPENROUTER_API_KEY env var).
-        model: Model to use for inference.
-
-    Returns:
-        Configured LLMClient instance.
-    """
-    return LLMClient(api_key=api_key, model=model)
