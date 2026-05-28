@@ -42,6 +42,10 @@ final class GlobalHotkey {
     private func isHotkeyEvent(_ event: NSEvent) -> Bool {
         guard event.type == .keyDown else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        return event.keyCode == 49 && flags == .option
+        
+        let targetKeyCode = UserDefaults.standard.object(forKey: "hotkeyKeyCode") as? Int ?? 49
+        let targetModifiers = UserDefaults.standard.object(forKey: "hotkeyModifiers") as? Int ?? Int(NSEvent.ModifierFlags.option.rawValue)
+        
+        return Int(event.keyCode) == targetKeyCode && Int(flags.rawValue) == targetModifiers
     }
 }

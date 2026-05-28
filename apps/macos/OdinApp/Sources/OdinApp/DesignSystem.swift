@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 
 enum OdinStyle {
-    static let accent = Color.white
-    static let gold = accent
+    static let accent = Color(red: 0.52, green: 0.34, blue: 0.96) // Electric purple/indigo
+    static let gold = Color(red: 0.95, green: 0.65, blue: 0.2) // Amber gold
 
-    static let green = Color(red: 0.20, green: 0.83, blue: 0.55)
-    static let red = Color(red: 0.92, green: 0.42, blue: 0.40)
+    static let green = Color(red: 0.16, green: 0.80, blue: 0.50) // Emerald mint
+    static let red = Color(red: 0.94, green: 0.33, blue: 0.31) // Coral red
 
     static let ink = Color.white.opacity(0.96)
     static let secondaryInk = Color.white.opacity(0.78)
@@ -17,9 +17,9 @@ enum OdinStyle {
     static let cardRadius: CGFloat = 10
     static let chipRadius: CGFloat = 11
 
-    static let cardFill = Color.white.opacity(0.04)
-    static let cardFillHover = Color.white.opacity(0.08)
-    static let cardStroke = Color.white.opacity(0.08)
+    static let cardFill = Color.white.opacity(0.05)
+    static let cardFillHover = Color.white.opacity(0.10)
+    static let cardStroke = Color.white.opacity(0.12)
 }
 
 enum OdinNotchMetrics {
@@ -54,7 +54,7 @@ enum OdinNotchMetrics {
         guard let screen else { return .zero }
         let width = restingWidth(on: screen) + 16
         let height = max(restingHeight + 16, 44)
-        return CGRect(
+        return CGRect( 
             x: screen.frame.midX - width / 2,
             y: screen.frame.maxY - height,
             width: width,
@@ -126,6 +126,10 @@ struct NotchSurface: ViewModifier {
         let strokeWidth: CGFloat = isIdle ? 1.2 : 0.7
 
         return content
+            .background(
+                NotchShape(cornerRadius: cornerRadius)
+                    .fill(Color(red: 0.08, green: 0.08, blue: 0.12).opacity(0.68))
+            )
             .glassEffect(.regular, in: NotchShape(cornerRadius: cornerRadius))
             .overlay(
                 NotchBorder(cornerRadius: cornerRadius)

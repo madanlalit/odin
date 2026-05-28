@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 enum Provider: String, CaseIterable, Identifiable {
     case openrouter
@@ -50,6 +51,12 @@ final class AppSettings: ObservableObject {
     @Published var requireActionApproval: Bool {
         didSet { save() }
     }
+    @Published var hotkeyKeyCode: Int {
+        didSet { save() }
+    }
+    @Published var hotkeyModifiers: Int {
+        didSet { save() }
+    }
     @Published var recentTasks: [String] = []
     @Published var pinnedTasks: [String] = []
 
@@ -91,6 +98,8 @@ final class AppSettings: ObservableObject {
         maxBatchActions = max(1, defaults.integer(forKey: "maxBatchActions", defaultValue: 5))
         traceScreenshots = defaults.object(forKey: "traceScreenshots") as? Bool ?? false
         requireActionApproval = defaults.object(forKey: "requireActionApproval") as? Bool ?? true
+        hotkeyKeyCode = defaults.object(forKey: "hotkeyKeyCode") as? Int ?? 49
+        hotkeyModifiers = defaults.object(forKey: "hotkeyModifiers") as? Int ?? Int(NSEvent.ModifierFlags.option.rawValue)
         recentTasks = defaults.stringArray(forKey: "recentTasks") ?? []
         pinnedTasks = defaults.stringArray(forKey: "pinnedTasks") ?? []
     }
@@ -172,6 +181,8 @@ final class AppSettings: ObservableObject {
         defaults.set(maxBatchActions, forKey: "maxBatchActions")
         defaults.set(traceScreenshots, forKey: "traceScreenshots")
         defaults.set(requireActionApproval, forKey: "requireActionApproval")
+        defaults.set(hotkeyKeyCode, forKey: "hotkeyKeyCode")
+        defaults.set(hotkeyModifiers, forKey: "hotkeyModifiers")
     }
 
     private static func defaultRepoPath() -> String {

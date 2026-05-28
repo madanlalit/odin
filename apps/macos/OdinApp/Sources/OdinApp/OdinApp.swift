@@ -5,48 +5,42 @@ import AppKit
 @main
 struct OdinDesktopApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var settings = AppSettings()
-    @StateObject private var runner = AgentRunner()
-    @StateObject private var permissions = PermissionManager()
 
     var body: some Scene {
-        WindowGroup(id: "chat") {
-            Group {
-                if permissions.allGranted {
-                    ChatPanel()
-                } else {
-                    OnboardingView()
-                }
-            }
-            .environmentObject(settings)
-            .environmentObject(runner)
-            .environmentObject(permissions)
-            .frame(minWidth: 200, idealWidth: 620, maxWidth: 760)
-            .fixedSize(horizontal: true, vertical: true)
-            .clearWindowContainerBackgroundIfAvailable()
-            .background(WindowConfigurator())
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-        }
-
         MenuBarExtra("Odin", systemImage: "circle.hexagongrid") {
             StatusMenu()
-                .environmentObject(settings)
-                .environmentObject(runner)
+                .environmentObject(appDelegate.settings)
+                .environmentObject(appDelegate.runner)
         }
 
         Settings {
             SettingsView()
-                .environmentObject(settings)
-                .environmentObject(permissions)
+                .environmentObject(appDelegate.settings)
+                .environmentObject(appDelegate.permissions)
         }
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class OdinPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+    static private(set) var shared: AppDelegate!
+
+    let settings = AppSettings()
+    let runner = AgentRunner()
+    let permissions = PermissionManager()
+
+    var panel: NSPanel?
+
+    override init() {
+        super.init()
+        AppDelegate.shared = self
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -57,6 +51,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NotificationManager.shared.requestPermission()
 
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            MainActor.assumeIsolated {
+                if let window = notification.object as? NSWindow, window == self?.panel {
+                    window.orderOut(nil)
+                }
+            }
+        }
+
         GlobalHotkey.shared.register { [weak self] in
             self?.toggleMainWindow()
         }
@@ -64,15 +70,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if #available(macOS 13.0, *), Bundle.main.bundleIdentifier != nil {
             try? SMAppService.mainApp.register()
         }
+
+        setupPanel()
+    }
+
+    private func setupPanel() {
+        let rootView = Group {
+            if permissions.allGranted {
+                ChatPanel()
+            } else {
+                OnboardingView()
+            }
+        }
+        .environmentObject(settings)
+        .environmentObject(runner)
+        .environmentObject(permissions)
+
+        let panel = OdinPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.identifier = NSUserInterfaceItemIdentifier("OdinMainWindow")
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .statusBar
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .ignoresCycle
+        ]
+
+        let hostingView = NSHostingView(rootView: rootView.background(WindowSizeUpdater(window: panel)))
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        panel.contentView = hostingView
+
+        NSLayoutConstraint.activate([
+            hostingView.leadingAnchor.constraint(equalTo: panel.contentView!.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: panel.contentView!.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: panel.contentView!.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: panel.contentView!.bottomAnchor)
+        ])
+
+        self.panel = panel
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            for window in NSApp.windows where window.canBecomeKey {
-                window.makeKeyAndOrderFront(nil)
-            }
-        }
-        NSApp.activate(ignoringOtherApps: true)
+        toggleMainWindow()
         return true
     }
 
@@ -80,108 +126,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GlobalHotkey.shared.unregister()
     }
 
-    private func toggleMainWindow() {
-        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
-            if window.isVisible && NSApp.isActive {
-                window.orderOut(nil)
-            } else {
-                window.makeKeyAndOrderFront(nil)
-                NSApp.activate(ignoringOtherApps: true)
-            }
-        }
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func clearWindowContainerBackgroundIfAvailable() -> some View {
-        if #available(macOS 15.0, *) {
-            containerBackground(.clear, for: .window)
+    func toggleMainWindow() {
+        guard let panel = panel else { return }
+        if panel.isVisible && NSApp.isActive {
+            panel.orderOut(nil)
         } else {
-            self
-        }
-    }
-}
-
-private struct WindowConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.styleMask = [.borderless]
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.isOpaque = false
-            window.backgroundColor = .clear
-            window.hasShadow = false
-            window.isMovableByWindowBackground = true
-            window.level = .statusBar
-            window.collectionBehavior = [
-                .canJoinAllSpaces,
-                .fullScreenAuxiliary,
-                .stationary,
-                .ignoresCycle,
-            ]
-
-            Self.anchorTopCenter(window: window)
-
-            if let themeFrame = window.contentView?.superview {
-                Self.stripBackgrounds(from: themeFrame)
-            }
-
-            for delay in [0.05, 0.15, 0.4] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    if let themeFrame = window.contentView?.superview {
-                        Self.stripBackgrounds(from: themeFrame)
-                    }
-                }
-            }
-
-            window.makeKeyAndOrderFront(nil)
+            panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
-        return view
+    }
+}
+
+struct SizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+struct WindowSizeUpdater: View {
+    let window: NSWindow
+
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear
+                .preference(key: SizePreferenceKey.self, value: geo.size)
+        }
+        .onPreferenceChange(SizePreferenceKey.self) { size in
+            guard size.width > 0 && size.height > 0 else { return }
+            Self.updateWindowFrame(window: window, size: size)
+        }
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard let window = nsView.window,
-              let themeFrame = window.contentView?.superview else { return }
-        Self.stripBackgrounds(from: themeFrame)
-        Self.anchorTopCenter(window: window)
-    }
-
-    static func anchorTopCenter(window: NSWindow) {
+    static func updateWindowFrame(window: NSWindow, size: CGSize) {
         guard let screen = window.screen ?? NSScreen.main else { return }
-        let size = window.frame.size
         let x = screen.frame.midX - size.width / 2
-        let isRestingPill = size.height <= OdinNotchMetrics.restingHeight + 2
-        let visibleRestingSliver: CGFloat = 0
-        let expandedTopBleed = OdinNotchMetrics.expandedTopBleed
-        let topBleed = isRestingPill
-            ? max(0, size.height - visibleRestingSliver)
-            : expandedTopBleed
-        let y = screen.frame.maxY - size.height + topBleed
-        let target = NSPoint(x: x, y: y)
-        if window.frame.origin == target { return }
+        let topMargin: CGFloat = 120
+        let y = screen.frame.maxY - size.height - topMargin
+        let target = NSRect(x: x, y: y, width: size.width, height: size.height)
+
+        if window.frame == target { return }
+
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.32
+            ctx.duration = 0.28
             ctx.allowsImplicitAnimation = true
             ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.32, 0.0, 0.18, 1.0)
-            window.animator().setFrameOrigin(target)
-        }
-    }
-
-    private static func stripBackgrounds(from view: NSView) {
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-        view.layer?.isOpaque = false
-
-        if let effectView = view as? NSVisualEffectView {
-            effectView.isHidden = true
-        }
-
-        for subview in view.subviews {
-            stripBackgrounds(from: subview)
+            window.animator().setFrame(target, display: true)
         }
     }
 }

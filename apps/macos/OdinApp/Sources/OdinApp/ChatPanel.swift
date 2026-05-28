@@ -35,99 +35,29 @@ struct ChatPanel: View {
     }
 
     private var resolvedMode: PillMode {
-        if mode == .open { return .open }
-        if runner.pendingApproval != nil { return .open }
-        if runner.isRunning { return .live }
-        if runner.lastResult != nil && (mode == .idle || mode == .hover) {
-            return .live
-        }
-        return mode
+        return .open
     }
 
     private var pillWidth: CGFloat {
-        switch resolvedMode {
-        case .idle: return OdinNotchMetrics.restingWidth()
-        case .hover: return OdinNotchMetrics.hoverWidth()
-        case .live: return 420
-        case .open: return 540
-        }
+        return 540
     }
 
     var body: some View {
-        Group {
-            if resolvedMode == .idle {
-                idlePill
-                    .frame(width: pillWidth, alignment: .top)
-            } else {
-                GlassEffectContainer(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        switch resolvedMode {
-                        case .idle:
-                            EmptyView()
-                        case .hover:
-                            hoverPill
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        case .live:
-                            livePill
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        case .open:
-                            openPill
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
-                    }
-                    .frame(width: pillWidth, alignment: .top)
-                    .scaleEffect(
-                        x: resolvedMode == .hover ? 1.02 : 1,
-                        y: resolvedMode == .hover ? 1.06 : 1,
-                        anchor: .top
-                    )
-                    .notchSurface(
-                        cornerRadius: OdinStyle.panelRadius,
-                        isAccented: runner.isRunning || runner.pendingApproval != nil,
-                        isIdle: false
-                    )
-                }
-                .transition(notchPopTransition)
+        openPill
+            .frame(width: pillWidth, alignment: .top)
+            .notchSurface(
+                cornerRadius: OdinStyle.panelRadius,
+                isAccented: runner.isRunning || runner.pendingApproval != nil,
+                isIdle: false
+            )
+        .transition(notchPopTransition)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                inputFocused = true
             }
-        }
-        .onHover { hovering in
-            isPointerOverVisiblePill = hovering
-            withAnimation(Self.morph) {
-                if hovering {
-                    if mode == .idle { mode = .hover }
-                } else {
-                    if mode == .hover { mode = .idle }
-                    if mode == .open
-                        && task.isEmpty
-                        && hint.isEmpty
-                        && !runner.isRunning
-                        && runner.pendingApproval == nil {
-                        inputFocused = false
-                        mode = .idle
-                    }
-                }
-            }
-        }
-        .animation(Self.morph, value: resolvedMode)
-        .animation(Self.morph, value: pillWidth)
-        .animation(Self.morph, value: showTrace)
-        .animation(Self.morph, value: runner.messages.count)
-        .animation(Self.morph, value: runner.isRunning)
-        .animation(Self.morph, value: runner.pendingApproval != nil)
-        .animation(Self.popOut, value: resolvedMode == .hover)
-        .onChange(of: runner.isRunning) { _, _ in
-            if !runner.isRunning && mode == .open {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    inputFocused = true
-                }
-            }
-        }
-        .onChange(of: runner.pendingApproval != nil) { _, hasApproval in
-            if hasApproval { mode = .open }
         }
         .onAppear {
-            mode = .idle
-            startEdgeHoverPolling()
+            inputFocused = true
             let runnerRef = runner
             TakeoverMonitor.shared.enable {
                 if runnerRef.isRunning {
@@ -136,108 +66,23 @@ struct ChatPanel: View {
             }
         }
         .onDisappear {
-            stopEdgeHoverPolling()
             TakeoverMonitor.shared.disable()
         }
-    }
-
-    private var idlePill: some View {
-        Color.clear
-            .frame(height: OdinNotchMetrics.restingHeight)
-            .contentShape(Rectangle())
-    }
-
-    private var hoverPill: some View {
-        Button {
-            openChatPanel()
-        } label: {
-            HStack(spacing: 8) {
-                Text("Odin")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(OdinStyle.ink)
-                Text("·")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
-                if let last = runner.lastResult {
-                    Text(last.level == .success ? "Done" : "Stopped")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(OdinStyle.secondaryInk)
-                } else {
-                    Text("Ready")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(OdinStyle.secondaryInk)
+        .background(
+            Button(action: {
+                if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "OdinMainWindow" }) {
+                    window.orderOut(nil)
                 }
-                Spacer(minLength: 6)
-                Circle()
-                    .fill(OdinStyle.accent)
-                    .frame(width: 5, height: 5)
+            }) {
+                Color.clear
             }
-            .padding(.horizontal, 16)
-            .frame(height: 36)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
-        .frame(width: pillWidth, height: 36)
-        .contentShape(Rectangle())
+            .keyboardShortcut(.escape, modifiers: [])
+            .buttonStyle(.plain)
+            .opacity(0)
+        )
     }
 
-    private var livePill: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 10) {
-                OdinMark(isActive: runner.isRunning, size: 18)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(liveTitle)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(OdinStyle.ink)
-                        .lineLimit(1)
-                    Text(liveSubtitle)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(OdinStyle.secondaryInk)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                if runner.isRunning {
-                    Button {
-                        runner.stop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(OdinStyle.secondaryInk)
-                            .frame(width: 22, height: 22)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Stop")
-                } else {
-                    Button {
-                        mode = .idle
-                        runner.clear()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(OdinStyle.secondaryInk)
-                            .frame(width: 22, height: 22)
-                            .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Dismiss")
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                mode = .open
-            }
-
-            if runner.isRunning {
-                ProgressHairline(fraction: progressFraction)
-            }
-        }
-    }
 
     private var openPill: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -540,42 +385,7 @@ struct ChatPanel: View {
         return String(model.prefix(14))
     }
 
-    private func startEdgeHoverPolling() {
-        guard edgeHoverTask == nil else { return }
-        edgeHoverTask = Task { @MainActor in
-            while !Task.isCancelled {
-                updateEdgeHoverState()
-                try? await Task.sleep(for: .milliseconds(50))
-            }
-        }
-    }
 
-    private func stopEdgeHoverPolling() {
-        edgeHoverTask?.cancel()
-        edgeHoverTask = nil
-    }
-
-    private func updateEdgeHoverState() {
-        guard !runner.isRunning, runner.pendingApproval == nil else { return }
-        guard mode == .idle || mode == .hover else { return }
-
-        let location = NSEvent.mouseLocation
-        let screen = OdinNotchMetrics.screenContaining(location)
-        let isInActivationZone = OdinNotchMetrics.activationRect(on: screen).contains(location)
-
-        if isInActivationZone, mode == .idle {
-            withAnimation(Self.morph) { mode = .hover }
-        } else if !isInActivationZone, mode == .hover, !isPointerOverVisiblePill {
-            withAnimation(Self.morph) { mode = .idle }
-        }
-    }
-
-    private func openChatPanel() {
-        withAnimation(Self.morph) { mode = .open }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            inputFocused = true
-        }
-    }
 
     private func submitTask() {
         let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)

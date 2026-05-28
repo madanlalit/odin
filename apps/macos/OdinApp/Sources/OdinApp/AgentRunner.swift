@@ -519,22 +519,6 @@ final class AgentRunner: ObservableObject {
             progress.phaseDetail = nil
             lastWhisper = Self.activeTitle(forAction: actionName)
         }
-
-        guard
-            let target = payload["target"] as? [String: Any],
-            let x = Self.doubleValue(target["x"]),
-            let y = Self.doubleValue(target["y"])
-        else {
-            return
-        }
-
-        Task { @MainActor in
-            AgentPointerOverlay.shared.show(
-                atAutomationX: x,
-                y: y,
-                action: actionName
-            )
-        }
     }
 
     private func handleActionApprovalRequested(_ payload: [String: Any], step: Int) {
@@ -593,9 +577,7 @@ final class AgentRunner: ObservableObject {
     }
 
     private func hideAgentPointer() {
-        Task { @MainActor in
-            AgentPointerOverlay.shared.hide()
-        }
+        // No-op: pointer overlay removed
     }
 
     private static func doubleValue(_ value: Any?) -> Double? {
