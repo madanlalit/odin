@@ -35,9 +35,14 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(Section.allCases, selection: $selection) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .tag(section)
+                HStack(spacing: 8) {
+                    Image(systemName: section.symbol)
+                        .foregroundStyle(sidebarIconColor(for: section))
+                        .frame(width: 16, height: 16)
+                    Text(section.title)
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .tag(section)
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 168, ideal: 180, max: 220)
@@ -60,6 +65,15 @@ struct SettingsView: View {
         .preferredColorScheme(.dark)
         .onAppear { apiKey = settings.apiKey() }
         .onChange(of: settings.provider) { _, _ in apiKey = settings.apiKey() }
+    }
+
+    private func sidebarIconColor(for section: Section) -> Color {
+        switch section {
+        case .general: return Color(red: 0.22, green: 0.64, blue: 0.95)
+        case .model: return Color(red: 0.95, green: 0.65, blue: 0.20)
+        case .permissions: return Color(red: 0.15, green: 0.82, blue: 0.52)
+        case .advanced: return Color(red: 0.94, green: 0.33, blue: 0.32)
+        }
     }
 
 
@@ -388,6 +402,14 @@ struct SettingsView: View {
 
     private func groupCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) { content() }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(OdinStyle.cardFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
+            )
             .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
@@ -467,7 +489,7 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 4)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.customGlass)
         .controlSize(.regular)
         .disabled(isDisabled)
     }
@@ -526,7 +548,7 @@ struct ShortcutRecorderView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .frame(minWidth: 160)
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.customGlass)
             .controlSize(.regular)
             
             if isRecording {

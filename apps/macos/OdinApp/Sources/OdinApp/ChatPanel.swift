@@ -407,11 +407,13 @@ struct ChatPanel: View {
 private struct BlinkingCaret: View {
     var height: CGFloat = 16
     @State private var visible = true
+    @State private var glow = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 1, style: .continuous)
-            .fill(OdinStyle.accent)
-            .frame(width: 2, height: height)
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(OdinStyle.brandGradient)
+            .frame(width: 2.5, height: height)
+            .shadow(color: OdinStyle.accent.opacity(glow ? 0.8 : 0.2), radius: glow ? 4 : 1)
             .opacity(visible ? 1 : 0)
             .onAppear {
                 withAnimation(
@@ -419,6 +421,12 @@ private struct BlinkingCaret: View {
                     .repeatForever(autoreverses: true)
                 ) {
                     visible = false
+                }
+                withAnimation(
+                    .easeInOut(duration: 1.1)
+                    .repeatForever(autoreverses: true)
+                ) {
+                    glow = true
                 }
             }
     }
@@ -428,27 +436,51 @@ private struct OdinMark: View {
     let isActive: Bool
     var size: CGFloat = 18
     @State private var breath: CGFloat = 1
+    @State private var rotation: Double = 0
 
     var body: some View {
         ZStack {
             if isActive {
                 Circle()
-                    .fill(OdinStyle.accent.opacity(0.22))
-                    .frame(width: size, height: size)
+                    .stroke(
+                        OdinStyle.brandGradient,
+                        lineWidth: 1
+                    )
+                    .frame(width: size * 1.3, height: size * 1.3)
+                    .opacity(0.3)
                     .scaleEffect(breath)
+                    .blur(radius: 1)
                     .animation(
                         .easeInOut(duration: 1.4).repeatForever(autoreverses: true),
                         value: breath
                     )
+                
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: [OdinStyle.accent, OdinStyle.accentSecondary, OdinStyle.accent.opacity(0.2)],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 6])
+                    )
+                    .frame(width: size, height: size)
+                    .rotationEffect(.degrees(rotation))
+                    .onAppear {
+                        withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+                            rotation = 360
+                        }
+                    }
             }
+            
             Circle()
-                .fill(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.85))
+                .fill(isActive ? OdinStyle.brandGradient : LinearGradient(colors: [OdinStyle.accent.opacity(0.85), OdinStyle.accentSecondary.opacity(0.85)], startPoint: .top, endPoint: .bottom))
                 .frame(width: size * 0.45, height: size * 0.45)
+                .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 4)
         }
-        .frame(width: size, height: size)
-        .onAppear { if isActive { breath = 1.18 } }
+        .frame(width: size * 1.3, height: size * 1.3)
+        .onAppear { if isActive { breath = 1.25 } }
         .onChange(of: isActive) { _, new in
-            breath = new ? 1.18 : 1
+            breath = new ? 1.25 : 1
         }
     }
 }
@@ -499,25 +531,26 @@ private struct RecentChip: View {
                     .foregroundStyle(OdinStyle.gold)
             }
             Text(displayText)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(OdinStyle.secondaryInk)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .frame(height: 24)
         .background(
             Capsule().fill(hovering ? OdinStyle.cardFillHover : OdinStyle.cardFill)
         )
         .overlay(
-            Capsule().strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
+            Capsule().strokeBorder(hovering ? OdinStyle.accent.opacity(0.4) : OdinStyle.cardStroke, lineWidth: 0.5)
         )
-        .onHover { hovering = $0 }
         .contentShape(Capsule())
         .onTapGesture(perform: onTap)
         .contextMenu {
             Button(pinned ? "Unpin" : "Pin", action: onPinToggle)
         }
         .help(text)
+        .onHover { hovering = $0 }
+        .scaleOnHover(scale: 1.03)
     }
 }
 
@@ -643,7 +676,8 @@ private struct TraceRow: View {
         .padding(.horizontal, 22)
         .padding(.vertical, 6)
         .background(
-            Rectangle().fill(isHovering ? Color.white.opacity(0.03) : Color.clear)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isHovering ? Color.white.opacity(0.025) : Color.clear)
         )
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }

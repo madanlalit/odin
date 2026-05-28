@@ -2,24 +2,40 @@ import SwiftUI
 import AppKit
 
 enum OdinStyle {
-    static let accent = Color(red: 0.52, green: 0.34, blue: 0.96) // Electric purple/indigo
-    static let gold = Color(red: 0.95, green: 0.65, blue: 0.2) // Amber gold
+    // Brand colors
+    static let accent = Color(red: 0.58, green: 0.38, blue: 0.98) // Electric violet
+    static let accentSecondary = Color(red: 0.20, green: 0.65, blue: 0.95) // Cool cyan
+    static let gold = Color(red: 0.95, green: 0.65, blue: 0.20) // Amber gold
 
-    static let green = Color(red: 0.16, green: 0.80, blue: 0.50) // Emerald mint
-    static let red = Color(red: 0.94, green: 0.33, blue: 0.31) // Coral red
+    static let green = Color(red: 0.15, green: 0.82, blue: 0.52) // Emerald mint
+    static let red = Color(red: 0.95, green: 0.34, blue: 0.32) // Coral red
 
+    // Backgrounds
+    static let background = Color(red: 0.05, green: 0.05, blue: 0.08)
+
+    // Typography Ink opacities
     static let ink = Color.white.opacity(0.96)
-    static let secondaryInk = Color.white.opacity(0.78)
-    static let tertiaryInk = Color.white.opacity(0.55)
-    static let separator = Color.white.opacity(0.10)
+    static let secondaryInk = Color.white.opacity(0.74)
+    static let tertiaryInk = Color.white.opacity(0.48)
+    static let separator = Color.white.opacity(0.08)
 
+    // Sizing
     static let panelRadius: CGFloat = 22
-    static let cardRadius: CGFloat = 10
-    static let chipRadius: CGFloat = 11
+    static let cardRadius: CGFloat = 12
+    static let chipRadius: CGFloat = 12
 
-    static let cardFill = Color.white.opacity(0.05)
-    static let cardFillHover = Color.white.opacity(0.10)
-    static let cardStroke = Color.white.opacity(0.12)
+    static let cardFill = Color.white.opacity(0.04)
+    static let cardFillHover = Color.white.opacity(0.08)
+    static let cardStroke = Color.white.opacity(0.08)
+    static let cardStrokeHover = Color.white.opacity(0.16)
+
+    static var brandGradient: LinearGradient {
+        LinearGradient(
+            colors: [accent, accentSecondary],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 enum OdinNotchMetrics {
@@ -54,7 +70,7 @@ enum OdinNotchMetrics {
         guard let screen else { return .zero }
         let width = restingWidth(on: screen) + 16
         let height = max(restingHeight + 16, 44)
-        return CGRect( 
+        return CGRect(
             x: screen.frame.midX - width / 2,
             y: screen.frame.maxY - height,
             width: width,
@@ -118,22 +134,24 @@ struct NotchSurface: ViewModifier {
     var isIdle: Bool = false
 
     func body(content: Content) -> some View {
-        let strokeColor: Color = {
-            if isIdle { return Color.white.opacity(0.34) }
-            if isAccented { return Color.white.opacity(0.22) }
-            return Color.white.opacity(0.12)
-        }()
+        let borderGradient = LinearGradient(
+            colors: isAccented ?
+                [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)] :
+                [Color.white.opacity(0.12), Color.white.opacity(0.03)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         let strokeWidth: CGFloat = isIdle ? 1.2 : 0.7
 
         return content
             .background(
                 NotchShape(cornerRadius: cornerRadius)
-                    .fill(Color(red: 0.08, green: 0.08, blue: 0.12).opacity(0.68))
+                    .fill(OdinStyle.background.opacity(0.78))
             )
             .glassEffect(.regular, in: NotchShape(cornerRadius: cornerRadius))
             .overlay(
                 NotchBorder(cornerRadius: cornerRadius)
-                    .stroke(strokeColor, lineWidth: strokeWidth)
+                    .stroke(borderGradient, lineWidth: strokeWidth)
             )
     }
 }
@@ -180,20 +198,83 @@ extension View {
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(OdinStyle.ink)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 7))
+            .foregroundStyle(.white)
+            .background(OdinStyle.brandGradient)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .shadow(color: OdinStyle.accent.opacity(0.24), radius: 6, y: 2)
             .opacity(configuration.isPressed ? 0.86 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
 struct SoftButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(OdinStyle.ink)
-            .glassEffect(
-                .regular.interactive(),
-                in: .rect(cornerRadius: 7)
+            .foregroundStyle(OdinStyle.secondaryInk)
+            .background(Color.white.opacity(0.04))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(configuration.isPressed ? 0.86 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+    }
+}
+
+struct CustomGlassButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 8
+    var isPrimary: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isPrimary ? .white : OdinStyle.secondaryInk)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(isPrimary ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.03))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        isPrimary ?
+                        LinearGradient(colors: [OdinStyle.accent.opacity(0.4), OdinStyle.accentSecondary.opacity(0.2)], startPoint: .top, endPoint: .bottom) :
+                        LinearGradient(colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)], startPoint: .top, endPoint: .bottom),
+                        lineWidth: 0.5
+                    )
+            )
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == CustomGlassButtonStyle {
+    static func customGlass(cornerRadius: CGFloat = 8, isPrimary: Bool = false) -> CustomGlassButtonStyle {
+        CustomGlassButtonStyle(cornerRadius: cornerRadius, isPrimary: isPrimary)
+    }
+    static var customGlass: CustomGlassButtonStyle {
+        CustomGlassButtonStyle(cornerRadius: 8, isPrimary: false)
+    }
+}
+
+struct ScaleOnHover: ViewModifier {
+    @State private var isHovering = false
+    var scale: CGFloat = 1.02
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovering ? scale : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: isHovering)
+            .onHover { hovering in
+                isHovering = hovering
+            }
+    }
+}
+
+extension View {
+    func scaleOnHover(scale: CGFloat = 1.02) -> some View {
+        modifier(ScaleOnHover(scale: scale))
     }
 }

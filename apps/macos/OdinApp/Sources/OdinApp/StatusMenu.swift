@@ -5,31 +5,32 @@ struct StatusMenu: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var runner: AgentRunner
     @Environment(\.openSettings) private var openSettings
-    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
+            Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
             actions
-            Divider()
+            Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
             modelInfo
-            Divider()
+            Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
             footer
         }
         .frame(width: 240)
+        .background(OdinStyle.background.opacity(0.85))
+        .preferredColorScheme(.dark)
     }
 
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(runner.isRunning ? OdinStyle.gold.opacity(0.16) : Color.primary.opacity(0.06))
+                    .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.04))
                     .frame(width: 28, height: 28)
                 Image(systemName: "circle.hexagongrid")
                     .resizable()
                     .renderingMode(.template)
-                    .foregroundStyle(runner.isRunning ? OdinStyle.gold : OdinStyle.ink.opacity(0.78))
+                    .foregroundStyle(runner.isRunning ? OdinStyle.brandGradient : LinearGradient(colors: [OdinStyle.ink.opacity(0.74)], startPoint: .top, endPoint: .bottom))
                     .frame(width: 15, height: 15)
             }
 
@@ -47,8 +48,9 @@ struct StatusMenu: View {
 
             if runner.isRunning {
                 Circle()
-                    .fill(OdinStyle.gold)
+                    .fill(OdinStyle.brandGradient)
                     .frame(width: 6, height: 6)
+                    .shadow(color: OdinStyle.accent.opacity(0.8), radius: 3)
             }
         }
         .padding(.horizontal, 12)
@@ -56,13 +58,15 @@ struct StatusMenu: View {
     }
 
     private var actions: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 2) {
             Button {
-                openWindow(id: "chat")
-                NSApp.activate(ignoringOtherApps: true)
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.toggleMainWindow()
+                }
             } label: {
                 Label("Show Odin", systemImage: "command")
             }
+            .buttonStyle(StatusMenuButtonStyle())
 
             if runner.isRunning {
                 Button {
@@ -70,6 +74,7 @@ struct StatusMenu: View {
                 } label: {
                     Label("Stop Current Task", systemImage: "stop.fill")
                 }
+                .buttonStyle(StatusMenuButtonStyle())
             }
 
             if runner.latestMessage != nil {
@@ -78,15 +83,17 @@ struct StatusMenu: View {
                 } label: {
                     Label("Clear Status", systemImage: "trash")
                 }
+                .buttonStyle(StatusMenuButtonStyle())
             }
         }
+        .padding(6)
     }
 
     private var modelInfo: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(settings.provider.displayName)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.system(size: 11.5, weight: .bold))
                     .foregroundStyle(OdinStyle.ink)
                 Text(settings.modelLabel)
                     .font(.system(size: 10, design: .monospaced))
@@ -101,20 +108,23 @@ struct StatusMenu: View {
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 2) {
             Button {
                 openSettings()
                 NSApp.activate(ignoringOtherApps: true)
             } label: {
                 Label("Settings…", systemImage: "slider.horizontal.3")
             }
+            .buttonStyle(StatusMenuButtonStyle())
 
             Button {
                 NSApp.terminate(nil)
             } label: {
                 Label("Quit Odin", systemImage: "power")
             }
+            .buttonStyle(StatusMenuButtonStyle())
         }
+        .padding(6)
     }
 
     private var statusLine: String {
@@ -125,5 +135,22 @@ struct StatusMenu: View {
             return last.level == .success ? "Finished" : "Needs attention"
         }
         return "Ready"
+    }
+}
+
+struct StatusMenuButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(OdinStyle.secondaryInk)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(configuration.isPressed ? Color.white.opacity(0.08) : Color.clear)
+            )
+            .contentShape(Rectangle())
+            .scaleOnHover(scale: 1.01)
     }
 }
