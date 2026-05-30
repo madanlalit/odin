@@ -34,6 +34,28 @@ enum IconLoader {
         return nil
     }
 
+    static func resizedLogo(height: CGFloat, horizontalPadding: CGFloat = 0) -> NSImage? {
+        guard let originalImage = logo() else { return nil }
+        let aspectRatio = originalImage.size.width / originalImage.size.height
+        let targetSize = NSSize(width: height * aspectRatio, height: height)
+        
+        let canvasSize = NSSize(width: targetSize.width + 2 * horizontalPadding, height: height)
+        let newImage = NSImage(size: canvasSize)
+        
+        newImage.lockFocus()
+        let rect = NSRect(
+            x: horizontalPadding,
+            y: 0,
+            width: targetSize.width,
+            height: targetSize.height
+        )
+        originalImage.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        newImage.unlockFocus()
+        
+        newImage.isTemplate = true
+        return newImage
+    }
+
     private static func loadFromBundle(
         imageset: String,
         baseName: String,

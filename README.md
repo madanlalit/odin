@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/odin_logo.png" alt="Odin Logo" width="140">
+  <img src="docs/assets/odin_logo.png" alt="Odin Logo" width="400">
   <br>
   <em>AI-powered computer automation agent using vision LLMs.</em>
   <br><br>
