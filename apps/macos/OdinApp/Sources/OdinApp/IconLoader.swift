@@ -88,6 +88,7 @@ struct OdinLogoImage: View {
                     let copy = originalImage.copy() as! NSImage
                     let aspectRatio = originalImage.size.width / originalImage.size.height
                     copy.size = NSSize(width: height * aspectRatio, height: height)
+                    copy.isTemplate = true
                     return copy
                 }()
                 Image(nsImage: nsImage)
