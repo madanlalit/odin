@@ -14,7 +14,7 @@ class LLMResponse(BaseModel):
 
     content: str
     reasoning: str | None = None
-    usage: dict[str, int] | None = None
+    usage: dict[str, Any] | None = None
     cost: dict[str, Any] | None = None
 
 
