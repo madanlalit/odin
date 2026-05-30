@@ -422,7 +422,7 @@ private struct OdinMark: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .foregroundStyle(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.8))
-                .frame(width: size * 0.82, height: size * 0.82)
+                .frame(width: size * 1.1, height: size * 0.6)
                 .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 3)
         }
         .frame(width: size * 1.3, height: size * 1.3)

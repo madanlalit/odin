@@ -97,7 +97,7 @@ struct OnboardingView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .foregroundStyle(OdinStyle.accent)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 52, height: 28)
                     .frame(width: 72, height: 72)
                     .background(
                         Circle()

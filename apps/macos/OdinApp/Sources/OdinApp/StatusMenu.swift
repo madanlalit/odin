@@ -26,7 +26,7 @@ struct StatusMenu: View {
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(runner.isRunning ? OdinStyle.accent : OdinStyle.ink.opacity(0.74))
-                    .frame(width: 16, height: 16)
+                    .frame(width: 22, height: 12)
             }
 
             VStack(alignment: .leading, spacing: 2) {
