@@ -14,6 +14,7 @@ struct OdinDesktopApp: App {
                 .tint(OdinStyle.accent)
         } label: {
             Image("OdinLogo", bundle: .module)
+                .renderingMode(.template)
         }
         .menuBarExtraStyle(.window)
 
@@ -50,8 +51,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        print("DEBUG: IconLoader.appIcon() = \(IconLoader.appIcon() != nil ? "Success" : "Failed")")
+        print("DEBUG: Bundle.module.image(forResource: \"AppIcon\") = \(Bundle.module.image(forResource: "AppIcon") != nil ? "Success" : "Failed")")
+        print("DEBUG: Bundle.module.image(forResource: \"OdinLogo\") = \(Bundle.module.image(forResource: "OdinLogo") != nil ? "Success" : "Failed")")
+        fflush(stdout)
+
         if let icon = IconLoader.appIcon() {
             NSApp.applicationIconImage = icon
+            NSApp.dockTile.display()
+        } else if let icon = Bundle.module.image(forResource: "AppIcon") {
+            print("DEBUG: Using Bundle.module.image(forResource: \"AppIcon\") fallback")
+            fflush(stdout)
+            NSApp.applicationIconImage = icon
+            NSApp.dockTile.display()
         }
 
         NotificationManager.shared.requestPermission()

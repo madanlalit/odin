@@ -15,6 +15,7 @@ let package = Package(
             path: "Sources/OdinApp",
             resources: [
                 .process("Assets.xcassets"),
+                .process("OdinLogo.png"),
             ],
             linkerSettings: [
                 .linkedFramework("ServiceManagement"),
