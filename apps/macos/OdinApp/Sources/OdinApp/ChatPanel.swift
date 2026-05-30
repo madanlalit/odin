@@ -102,6 +102,11 @@ struct ChatPanel: View {
                     .padding(.top, -1)
             }
 
+            if let lastResult = runner.lastResult, lastResult.level == .error || lastResult.level == .warning {
+                Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
+                ErrorBanner(message: lastResult, dismiss: { runner.lastResult = nil })
+            }
+
             if !pinnedAndRecents.isEmpty && !runner.isRunning {
                 Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
                 recentsRow
@@ -877,6 +882,46 @@ private struct ApprovalRegion: View {
     private var approvalContext: String {
         let subtitle = approval.actionSubtitle ?? "Current app"
         return "\(subtitle) · Step \(approval.batchIndex) of \(approval.batchCount)"
+    }
+}
+
+private struct ErrorBanner: View {
+    let message: RunnerMessage
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(message.level.color)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(message.title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(OdinStyle.ink)
+                if let detail = message.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: dismiss) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(OdinStyle.tertiaryInk)
+            }
+            .buttonStyle(.plain)
+            .scaleOnHover()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(message.level.color.opacity(0.04))
     }
 }
 
