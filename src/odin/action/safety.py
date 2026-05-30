@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-
 from odin.platform.macos import MacOSBackend
 
 

@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 
-
 KEY_ALIASES: dict[str, str] = {
     "cmd": "command",
     "command": "command",

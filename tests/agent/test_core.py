@@ -11,8 +11,8 @@ from odin.action.safety import SafetyConfig
 from odin.agent.core import Agent, AgentConfig, AgentStatus
 from odin.agent.executor import ActionExecutor
 from odin.agent.parser import ParsedAction
-from odin.perception.accessibility import AXElementInfo, AXFrame, AccessibilitySnapshot
 from odin.llm.base import LLMResponse
+from odin.perception.accessibility import AccessibilitySnapshot, AXElementInfo, AXFrame
 
 
 def _action(name: str, params: dict | None = None, thought: str | None = None) -> dict:

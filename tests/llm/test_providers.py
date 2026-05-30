@@ -47,11 +47,10 @@ def _sample_screen_context() -> dict:
 def test_create_client_defaults_to_openrouter():
     """Default factory path remains OpenRouter."""
     httpx_module = MagicMock()
-    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True):
-        with patch.object(
-            OpenRouterLLMClient, "_load_httpx", return_value=httpx_module
-        ):
-            client = create_client()
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True), patch.object(
+        OpenRouterLLMClient, "_load_httpx", return_value=httpx_module
+    ):
+        client = create_client()
 
     assert isinstance(client, OpenRouterLLMClient)
     assert client.model == DEFAULT_OPENROUTER_MODEL
@@ -87,25 +86,31 @@ def test_create_client_defaults_to_bedrock_opus():
 
 def test_openrouter_client_requires_optional_dependency():
     """Using OpenRouter without the optional extra raises a clear error."""
-    with patch("odin.llm.providers.openrouter.import_module", side_effect=ImportError):
-        with pytest.raises(ImportError, match=r"odin\[openrouter\]"):
-            OpenRouterLLMClient(api_key="test-key")
+    with (
+        patch("odin.llm.providers.openrouter.import_module", side_effect=ImportError),
+        pytest.raises(ImportError, match=r"odin\[openrouter\]"),
+    ):
+        OpenRouterLLMClient(api_key="test-key")
 
 
 def test_bedrock_client_requires_optional_dependency():
     """Using Bedrock without the optional extra raises a clear error."""
-    with patch("odin.llm.providers.bedrock.import_module", side_effect=ImportError):
-        with pytest.raises(ImportError, match=r"odin\[bedrock\]"):
-            BedrockLLMClient(model="amazon.nova-lite-v1:0")
+    with (
+        patch("odin.llm.providers.bedrock.import_module", side_effect=ImportError),
+        pytest.raises(ImportError, match=r"odin\[bedrock\]"),
+    ):
+        BedrockLLMClient(model="amazon.nova-lite-v1:0")
 
 
 def test_bedrock_client_uses_aws_region_env_var():
     """AWS_REGION is accepted even though boto3 defaults to AWS_DEFAULT_REGION."""
     boto3_module = MagicMock()
     session = boto3_module.Session.return_value
-    with patch.dict(os.environ, {"AWS_REGION": "us-east-1"}, clear=True):
-        with patch("odin.llm.providers.bedrock.import_module", return_value=boto3_module):
-            BedrockLLMClient(model="amazon.nova-lite-v1:0")
+    with (
+        patch.dict(os.environ, {"AWS_REGION": "us-east-1"}, clear=True),
+        patch("odin.llm.providers.bedrock.import_module", return_value=boto3_module),
+    ):
+        BedrockLLMClient(model="amazon.nova-lite-v1:0")
 
     boto3_module.Session.assert_called_once_with(region_name="us-east-1")
     session.client.assert_called_once_with("bedrock-runtime")
@@ -115,9 +120,11 @@ def test_bedrock_client_uses_aws_region_name_env_var():
     """AWS_REGION_NAME is accepted for compatibility with common app settings."""
     boto3_module = MagicMock()
     session = boto3_module.Session.return_value
-    with patch.dict(os.environ, {"AWS_REGION_NAME": "us-east-1"}, clear=True):
-        with patch("odin.llm.providers.bedrock.import_module", return_value=boto3_module):
-            BedrockLLMClient(model="amazon.nova-lite-v1:0")
+    with (
+        patch.dict(os.environ, {"AWS_REGION_NAME": "us-east-1"}, clear=True),
+        patch("odin.llm.providers.bedrock.import_module", return_value=boto3_module),
+    ):
+        BedrockLLMClient(model="amazon.nova-lite-v1:0")
 
     boto3_module.Session.assert_called_once_with(region_name="us-east-1")
     session.client.assert_called_once_with("bedrock-runtime")

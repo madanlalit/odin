@@ -1,11 +1,11 @@
 """Core agent implementing the ReAct loop for screen automation."""
 
+import time
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-import time
 from typing import Any
-from collections.abc import Callable
 from uuid import uuid4
 
 from PIL import Image
@@ -912,9 +912,7 @@ class Agent:
     ) -> ParsedAction:
         """Map screenshot coordinates from the model to screen coordinates."""
         coordinate_keys: tuple[tuple[str, str], ...]
-        if action.action in {"click", "double_click", "move"}:
-            coordinate_keys = (("x", "y"),)
-        elif action.action == "scroll" and {"x", "y"}.issubset(action.params):
+        if action.action in {"click", "double_click", "move"} or (action.action == "scroll" and {"x", "y"}.issubset(action.params)):
             coordinate_keys = (("x", "y"),)
         elif action.action == "drag":
             coordinate_keys = (("start_x", "start_y"), ("end_x", "end_y"))

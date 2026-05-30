@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 from odin.action.keys import normalize_keys
 
-
 ActionType = Literal[
     "click",
     "double_click",

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import traceback
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, datetime
 from enum import Enum
-import json
 from pathlib import Path
-import traceback
 from typing import Any, Protocol
 from uuid import uuid4
 

@@ -22,3 +22,11 @@ wheels/
 # Swift build artifacts
 .build/
 
+# Testing, caching, and trace output
+.pytest_cache/
+.mypy_cache/
+.traces/
+test_original.png
+test_compressed.png
+screenshots/
+

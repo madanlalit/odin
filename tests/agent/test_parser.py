@@ -5,9 +5,9 @@ import json
 import pytest
 
 from odin.agent.parser import (
+    VALID_ACTIONS,
     ParsedAction,
     ParseError,
-    VALID_ACTIONS,
     parse_llm_actions,
     validate_action_params,
 )
@@ -321,7 +321,7 @@ class TestValidateActionParams:
             params={"text": "hello"},
             raw_response="",
         )
-        valid, error = validate_action_params(action)
+        valid, _ = validate_action_params(action)
 
         assert valid is True
 
@@ -360,7 +360,7 @@ class TestValidateActionParams:
             params={"keys": ["command", "v"]},
             raw_response="",
         )
-        valid, error = validate_action_params(action)
+        valid, _ = validate_action_params(action)
 
         assert valid is True
 
@@ -400,7 +400,7 @@ class TestValidateActionParams:
             params={"direction": "up"},
             raw_response="",
         )
-        valid, error = validate_action_params(action)
+        valid, _ = validate_action_params(action)
 
         assert valid is True
 

@@ -14,10 +14,7 @@ class Processing:
             image_source: File path or PIL Image object.
             max_size: Max dimensions as (width, height).
         """
-        if isinstance(image_source, str):
-            image = Image.open(image_source)
-        else:
-            image = image_source
+        image = Image.open(image_source) if isinstance(image_source, str) else image_source
 
         if image.mode != "RGB":
             image = image.convert("RGB")

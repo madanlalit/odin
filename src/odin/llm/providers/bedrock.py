@@ -1,15 +1,14 @@
 """AWS Bedrock LLM client with vision support."""
 
+import os
 from importlib import import_module
 from io import BytesIO
-import os
 from typing import Any
 
 from PIL import Image
 
 from odin.llm.base import DEFAULT_BEDROCK_MODEL, LLMResponse
 from odin.llm.context import format_screen_context
-
 
 DEFAULT_TOKEN_RATES_PER_1K: dict[str, tuple[float, float]] = {
     "anthropic.claude-opus-4-7": (0.005, 0.025),
@@ -229,9 +228,7 @@ class BedrockLLMClient:
                 blocks.append({"text": str(item)})
                 continue
 
-            if isinstance(item.get("text"), str):
-                blocks.append({"text": item["text"]})
-            elif item.get("type") == "text" and isinstance(item.get("text"), str):
+            if isinstance(item.get("text"), str) or (item.get("type") == "text" and isinstance(item.get("text"), str)):
                 blocks.append({"text": item["text"]})
 
         return blocks
