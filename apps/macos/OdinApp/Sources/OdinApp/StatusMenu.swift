@@ -17,22 +17,19 @@ struct StatusMenu: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 40, height: 40)
                 OdinLogoImage()
                     .foregroundStyle(runner.isRunning ? OdinStyle.accent : OdinStyle.ink.opacity(0.74))
-                    .frame(width: 22, height: 12)
+                    .frame(width: 30, height: 17)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Odin")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(OdinStyle.ink)
                 Text(statusLine)
-                    .font(.system(size: 10.5))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(statusColor)
                     .lineLimit(2)
                     .frame(maxWidth: 150, alignment: .leading)
