@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 enum IconLoader {
 
@@ -8,6 +9,29 @@ enum IconLoader {
             baseName: "icon_\(pointSize)x\(pointSize)",
             fallbackBaseName: "icon_256x256"
         )
+    }
+
+    /// Loads the OdinLogo template image from the bundle resources.
+    /// This bypasses the asset catalog (which SPM doesn't compile) and
+    /// loads the loose OdinLogo.png file directly.
+    static func logo() -> NSImage? {
+        // Try the loose resource file first (added via .process("OdinLogo.png"))
+        if let img = Bundle.module.image(forResource: "OdinLogo") {
+            img.isTemplate = true
+            return img
+        }
+        // Fallback: try the imageset directory
+        let assetDir = Bundle.module.resourceURL?
+            .appendingPathComponent("Assets.xcassets")
+            .appendingPathComponent("OdinLogo.imageset")
+        if let dir = assetDir {
+            let url = dir.appendingPathComponent("logo.png")
+            if let img = NSImage(contentsOf: url) {
+                img.isTemplate = true
+                return img
+            }
+        }
+        return nil
     }
 
     private static func loadFromBundle(
@@ -53,3 +77,18 @@ enum IconLoader {
         return bundle.url(forResource: name, withExtension: "png")
     }
 }
+
+/// A SwiftUI view that reliably displays the Odin logo from bundle resources.
+/// Use this instead of `Image("OdinLogo", bundle: .module)` which fails under SPM
+/// because SPM does not compile .xcassets into a binary asset catalog.
+struct OdinLogoImage: View {
+    var body: some View {
+        if let nsImage = IconLoader.logo() {
+            Image(nsImage: nsImage)
+                .renderingMode(.template)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+        }
+    }
+}
+

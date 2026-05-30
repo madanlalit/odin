@@ -92,10 +92,7 @@ struct OnboardingView: View {
                     .fill(OdinStyle.accent.opacity(0.08))
                     .frame(width: 96, height: 96)
 
-                Image("OdinLogo", bundle: .module)
-                    .renderingMode(.template)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                OdinLogoImage()
                     .foregroundStyle(OdinStyle.accent)
                     .frame(width: 52, height: 28)
                     .frame(width: 72, height: 72)

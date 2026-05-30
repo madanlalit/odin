@@ -417,10 +417,7 @@ private struct OdinMark: View {
                     .scaleEffect(breath)
             }
             
-            Image("OdinLogo", bundle: .module)
-                .renderingMode(.template)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
+            OdinLogoImage()
                 .foregroundStyle(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.8))
                 .frame(width: size * 1.1, height: size * 0.6)
                 .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 3)

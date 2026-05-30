@@ -22,9 +22,7 @@ struct StatusMenu: View {
                 Circle()
                     .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
                     .frame(width: 28, height: 28)
-                Image("OdinLogo", bundle: .module)
-                    .resizable()
-                    .renderingMode(.template)
+                OdinLogoImage()
                     .foregroundStyle(runner.isRunning ? OdinStyle.accent : OdinStyle.ink.opacity(0.74))
                     .frame(width: 22, height: 12)
             }
