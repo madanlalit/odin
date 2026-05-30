@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Simple demo - click at coordinates to verify pyautogui is working.
+Simple demo - click at coordinates to verify the Quartz backend is working.
 
 Run with:
     uv run python examples/demo_click.py

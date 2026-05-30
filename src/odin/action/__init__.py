@@ -8,6 +8,6 @@ __all__ = [
     "ActionController",
     "ActionResult",
     "ElementActionHandler",
-    "SafetyController",
     "SafetyConfig",
+    "SafetyController",
 ]

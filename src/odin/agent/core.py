@@ -4,7 +4,8 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from uuid import uuid4
 
 from PIL import Image

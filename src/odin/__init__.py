@@ -14,6 +14,6 @@ __all__ = [
     "AgentConfig",
     "AgentResult",
     "JsonlTracer",
-    "create_client",
     "__version__",
+    "create_client",
 ]

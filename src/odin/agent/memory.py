@@ -49,8 +49,9 @@ class AgentMemory:
 
         if len(self.messages) > self.max_messages:
             if self.messages and self.messages[0].get("role") == "system":
-                self.messages = [self.messages[0]] + self.messages[
-                    -(self.max_messages - 1) :
+                self.messages = [
+                    self.messages[0],
+                    *self.messages[-(self.max_messages - 1) :],
                 ]
             else:
                 self.messages = self.messages[-self.max_messages :]
