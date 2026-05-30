@@ -78,16 +78,26 @@ enum IconLoader {
     }
 }
 
-/// A SwiftUI view that reliably displays the Odin logo from bundle resources.
-/// Use this instead of `Image("OdinLogo", bundle: .module)` which fails under SPM
-/// because SPM does not compile .xcassets into a binary asset catalog.
 struct OdinLogoImage: View {
+    var height: CGFloat? = nil
+
     var body: some View {
-        if let nsImage = IconLoader.logo() {
-            Image(nsImage: nsImage)
-                .renderingMode(.template)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
+        if let originalImage = IconLoader.logo() {
+            if let height = height {
+                let nsImage: NSImage = {
+                    let copy = originalImage.copy() as! NSImage
+                    let aspectRatio = originalImage.size.width / originalImage.size.height
+                    copy.size = NSSize(width: height * aspectRatio, height: height)
+                    return copy
+                }()
+                Image(nsImage: nsImage)
+                    .renderingMode(.template)
+            } else {
+                Image(nsImage: originalImage)
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            }
         }
     }
 }
