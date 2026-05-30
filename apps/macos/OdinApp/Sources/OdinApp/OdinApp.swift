@@ -13,7 +13,7 @@ struct OdinDesktopApp: App {
                 .environmentObject(appDelegate.runner)
                 .tint(OdinStyle.accent)
         } label: {
-            OdinLogoImage(height: 18)
+            OdinLogoImage(height: 20)
                 .padding(.horizontal, 6)
         }
         .menuBarExtraStyle(.window)
