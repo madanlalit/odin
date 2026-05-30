@@ -21,10 +21,10 @@ struct StatusMenu: View {
             ZStack {
                 Circle()
                     .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 50, height: 50)
                 OdinLogoImage()
                     .foregroundStyle(runner.isRunning ? OdinStyle.accent : OdinStyle.ink.opacity(0.74))
-                    .frame(width: 30, height: 17)
+                    .frame(width: 38, height: 21)
             }
 
             VStack(alignment: .leading, spacing: 2) {
