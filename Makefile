@@ -45,7 +45,7 @@ run-app:
 	swift run --package-path apps/macos/OdinApp Odin
 
 clean:
-	rm -rf .traces .pytest_cache .mypy_cache .ruff_cache __pycache__
+	rm -rf .traces .pytest_cache .mypy_cache .ruff_cache __pycache__ apps/macos/OdinApp/.build
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
