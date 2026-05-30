@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.level = .statusBar
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.collectionBehavior = [
             .canJoinAllSpaces,
             .fullScreenAuxiliary,
