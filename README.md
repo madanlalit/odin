@@ -4,7 +4,7 @@
   <em>AI-powered computer automation agent using vision LLMs.</em>
   <br><br>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/python-3.12+-blue.svg" alt="Python 3.12+">
 
 ## Demo
 
@@ -30,7 +30,7 @@ graph TD
 - **Vision LLM**: Supports optional OpenRouter and AWS Bedrock providers
 - **macOS Accessibility Context**: Sends a compact AX tree alongside screenshots
 - **Element Actions**: Press, click, focus, set text, and scroll by accessibility ID
-- **PyAutoGUI Fallbacks**: Coordinate click, type, scroll, hotkeys, and more
+- **CoreGraphics Fallbacks**: Coordinate click, type, scroll, hotkeys, and more
 - **Safety Layer**: Rate limiting, bounds checking, dangerous action detection
 - **Memory**: Tracks conversation history and executed actions
 
@@ -152,7 +152,7 @@ The model can use element-based actions:
 Supported element actions include `click_element`, `double_click_element`,
 `press_element`, `focus_element`, `set_text`, and `scroll_element`. Odin tries
 native AX actions first where possible and falls back to the element frame center
-with PyAutoGUI when appropriate.
+using Quartz mouse/keyboard events when appropriate.
 
 ## Tracing
 
@@ -207,7 +207,7 @@ src/odin/
 │   ├── parser.py    # LLM response parser
 │   └── tracing.py   # Structured JSONL tracing
 ├── action/          # GUI automation
-│   ├── controller.py # PyAutoGUI actions
+│   ├── controller.py # Quartz backend GUI actions
 │   └── safety.py    # Safety checks
 ├── llm/             # LLM integration
 │   ├── base.py      # Provider protocol and response types
