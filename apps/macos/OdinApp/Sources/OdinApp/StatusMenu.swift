@@ -22,11 +22,11 @@ struct StatusMenu: View {
                 Circle()
                     .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
                     .frame(width: 28, height: 28)
-                Image(systemName: "circle.hexagongrid")
+                Image("OdinLogo", bundle: .module)
                     .resizable()
                     .renderingMode(.template)
                     .foregroundStyle(runner.isRunning ? OdinStyle.accent : OdinStyle.ink.opacity(0.74))
-                    .frame(width: 15, height: 15)
+                    .frame(width: 16, height: 16)
             }
 
             VStack(alignment: .leading, spacing: 2) {
