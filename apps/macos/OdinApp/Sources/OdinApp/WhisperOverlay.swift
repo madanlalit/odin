@@ -162,7 +162,7 @@ private struct WhisperLabel: View {
                 .frame(width: 5, height: 5)
             Text(text)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.94))
+                .foregroundStyle(OdinStyle.ink)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
@@ -170,13 +170,14 @@ private struct WhisperLabel: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color.black.opacity(0.74))
+                .fill(OdinStyle.background.opacity(0.30))
         )
+        .glassEffect(.regular, in: .capsule)
         .overlay(
             Capsule()
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(OdinStyle.warmCream.opacity(0.06), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.30), radius: 8, y: 3)
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
         .fixedSize()
     }
 }

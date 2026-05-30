@@ -100,6 +100,50 @@ def _parse_action_object(
 ) -> ParsedAction:
     """Parse one action object into a ParsedAction."""
     if "action" not in data:
+        # Check if the object contains a single key that is a valid action (like {"hotkey": {...}})
+        keys = [k for k in data.keys() if k not in CONTROL_FIELDS]
+        if len(keys) == 1 and keys[0] in VALID_ACTIONS:
+            action_type = keys[0]
+            val = data[action_type]
+            if isinstance(val, dict):
+                data = {
+                    "action": action_type,
+                    "params": val,
+                    **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                }
+            elif isinstance(val, list) and action_type == "hotkey":
+                data = {
+                    "action": action_type,
+                    "params": {"keys": val},
+                    **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                }
+            elif isinstance(val, (int, float)) and action_type == "wait":
+                data = {
+                    "action": action_type,
+                    "params": {"seconds": val},
+                    **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                }
+            elif isinstance(val, str):
+                if action_type == "type":
+                    data = {
+                        "action": action_type,
+                        "params": {"text": val},
+                        **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                    }
+                elif action_type in ("click_element", "double_click_element", "focus_element", "press_element"):
+                    data = {
+                        "action": action_type,
+                        "params": {"element_id": val},
+                        **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                    }
+                elif action_type == "scroll":
+                    data = {
+                        "action": action_type,
+                        "params": {"direction": val},
+                        **{k: v for k, v in data.items() if k in CONTROL_FIELDS}
+                    }
+
+    if "action" not in data:
         raise ParseError("Missing 'action' field in response")
 
     action_value = data["action"]

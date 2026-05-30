@@ -7,10 +7,13 @@ struct OdinDesktopApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Odin", systemImage: "circle.hexagongrid") {
+        MenuBarExtra {
             StatusMenu()
                 .environmentObject(appDelegate.settings)
                 .environmentObject(appDelegate.runner)
+                .tint(OdinStyle.accent)
+        } label: {
+            Image("OdinLogo", bundle: .module)
         }
         .menuBarExtraStyle(.window)
 
@@ -18,6 +21,7 @@ struct OdinDesktopApp: App {
             SettingsView()
                 .environmentObject(appDelegate.settings)
                 .environmentObject(appDelegate.permissions)
+                .tint(OdinStyle.accent)
         }
     }
 }
@@ -86,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         .environmentObject(settings)
         .environmentObject(runner)
         .environmentObject(permissions)
+        .tint(OdinStyle.accent)
 
         let panel = OdinPanel(
             contentRect: NSRect(x: 0, y: 0, width: 540, height: 200),
@@ -127,13 +132,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         GlobalHotkey.shared.unregister()
     }
 
+    func showMainWindow() {
+        guard let panel = panel else { return }
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     func toggleMainWindow() {
         guard let panel = panel else { return }
         if panel.isVisible && NSApp.isActive {
             panel.orderOut(nil)
         } else {
-            panel.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            showMainWindow()
         }
     }
 }
@@ -155,7 +165,9 @@ struct WindowSizeUpdater: View {
         }
         .onPreferenceChange(SizePreferenceKey.self) { size in
             guard size.width > 0 && size.height > 0 else { return }
-            Self.updateWindowFrame(window: window, size: size)
+            DispatchQueue.main.async {
+                Self.updateWindowFrame(window: window, size: size)
+            }
         }
     }
 

@@ -14,6 +14,9 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
+                // Top margin to avoid overlapping with window control buttons (traffic lights)
+                Spacer().frame(height: 16)
+
                 Text("Odin Settings")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(OdinStyle.ink)
@@ -24,16 +27,32 @@ struct SettingsView: View {
                 permissionsPane
                 advancedPane
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
         .frame(width: 520, height: 600)
-        .preferredColorScheme(.dark)
+        .glassSurface(cornerRadius: OdinStyle.panelRadius)
         .onAppear {
             apiKey = settings.apiKey()
             awsAccessKeyId = settings.awsAccessKeyId()
             awsSecretKey = settings.awsSecretAccessKey()
             awsSessionToken = settings.awsSessionToken()
             permissions.startPolling()
+
+            DispatchQueue.main.async {
+                if let window = NSApp.windows.first(where: {
+                    $0.title == "Odin Settings" ||
+                    $0.identifier?.rawValue == "Settings" ||
+                    $0.className.contains("SettingsWindow") ||
+                    ($0.contentView?.subviews.first?.description.contains("SettingsView") ?? false)
+                }) {
+                    window.isOpaque = false
+                    window.backgroundColor = .clear
+                    window.titlebarAppearsTransparent = true
+                    window.titleVisibility = .hidden
+                    window.hasShadow = true
+                }
+            }
         }
         .onDisappear {
             permissions.stopPolling()
@@ -253,11 +272,12 @@ struct SettingsView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isSelected ? OdinStyle.accent.opacity(0.12) : OdinStyle.cardFill)
+                    .fill(isSelected ? OdinStyle.accent.opacity(0.06) : OdinStyle.warmCream.opacity(0.02))
             )
+            .glassEffect(.regular, in: .rect(cornerRadius: 9))
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(isSelected ? OdinStyle.accent.opacity(0.3) : OdinStyle.cardStroke, lineWidth: 0.5)
+                    .strokeBorder(isSelected ? OdinStyle.accent.opacity(0.24) : OdinStyle.cardStroke, lineWidth: 0.5)
             )
             .contentShape(Rectangle())
         }
@@ -314,11 +334,11 @@ struct SettingsView: View {
                 .frame(width: 30, height: 30)
                 .background(
                     Circle()
-                        .fill(granted ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.04))
+                        .fill(granted ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
                 )
                 .overlay(
                     Circle()
-                        .strokeBorder(granted ? OdinStyle.accent.opacity(0.3) : Color.white.opacity(0.08), lineWidth: 0.5)
+                        .strokeBorder(granted ? OdinStyle.accent.opacity(0.3) : OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -417,7 +437,7 @@ struct SettingsView: View {
                             .cornerRadius(6)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(OdinStyle.warmCream.opacity(0.1), lineWidth: 0.5)
                             )
                     }
                     .padding(16)
@@ -453,8 +473,9 @@ struct SettingsView: View {
         VStack(spacing: 0) { content() }
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(OdinStyle.cardFill)
+                    .fill(OdinStyle.warmCream.opacity(0.02))
             )
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)

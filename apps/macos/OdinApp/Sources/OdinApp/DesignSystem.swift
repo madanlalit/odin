@@ -2,34 +2,46 @@ import SwiftUI
 import AppKit
 
 enum OdinStyle {
-    // Brand colors: Monochromatic palette
-    static let accent = Color.white // Monochromatic white
-    static let accentSecondary = Color(white: 0.90) // Soft silver
-    static let gold = Color(white: 0.90) // Soft silver
+    // Brand colors: Monochromatic palette, dynamically matching light/dark appearances
+    static var accent: Color {
+        .primary
+    }
+
+    static var accentSecondary: Color {
+        Color.primary.opacity(0.85)
+    }
+
+    static var gold: Color {
+        Color.primary.opacity(0.85)
+    }
 
     static let green = Color(red: 0.2, green: 0.82, blue: 0.38) // Clean green
     static let red = Color(red: 1.0, green: 0.23, blue: 0.18) // Clean red
 
-    // Dark neutral background
-    static let background = Color(white: 0.06)
+    // Neutral backgrounds that adapt to appearance
+    static var background: Color {
+        Color(nsColor: .windowBackgroundColor)
+    }
 
-    // Neutral base tint
-    static let warmCream = Color.white
+    // Neutral base tint: adapts from white in dark mode to black in light mode
+    static var warmCream: Color {
+        .primary
+    }
 
-    static let ink = warmCream.opacity(0.94)
-    static let secondaryInk = warmCream.opacity(0.68)
-    static let tertiaryInk = warmCream.opacity(0.42)
-    static let separator = warmCream.opacity(0.06)
+    static var ink: Color { warmCream.opacity(0.94) }
+    static var secondaryInk: Color { warmCream.opacity(0.68) }
+    static var tertiaryInk: Color { warmCream.opacity(0.42) }
+    static var separator: Color { warmCream.opacity(0.06) }
 
     // Sizing
     static let panelRadius: CGFloat = 22
     static let cardRadius: CGFloat = 12
     static let chipRadius: CGFloat = 12
 
-    static let cardFill = warmCream.opacity(0.05)
-    static let cardFillHover = warmCream.opacity(0.10)
-    static let cardStroke = warmCream.opacity(0.08)
-    static let cardStrokeHover = warmCream.opacity(0.14)
+    static var cardFill: Color { warmCream.opacity(0.05) }
+    static var cardFillHover: Color { warmCream.opacity(0.10) }
+    static var cardStroke: Color { warmCream.opacity(0.08) }
+    static var cardStrokeHover: Color { warmCream.opacity(0.14) }
 
     static var brandGradient: Color {
         accent
@@ -191,11 +203,26 @@ extension View {
 
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(Color.black.opacity(0.85)) // Dark text for white/silver background
+        let textColor = Color(nsColor: NSColor(name: nil) { appearance in
+            if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+                return NSColor(white: 0.0, alpha: 0.85) // Black text in dark mode (white bg)
+            } else {
+                return NSColor(white: 1.0, alpha: 0.95) // White text in light mode (black bg)
+            }
+        })
+        let shadowColor = Color(nsColor: NSColor(name: nil) { appearance in
+            if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+                return NSColor(white: 0.0, alpha: 0.12)
+            } else {
+                return NSColor(white: 0.0, alpha: 0.25)
+            }
+        })
+
+        return configuration.label
+            .foregroundStyle(textColor)
             .background(OdinStyle.brandGradient)
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .shadow(color: Color.black.opacity(0.12), radius: 6, y: 2)
+            .shadow(color: shadowColor, radius: 6, y: 2)
             .opacity(configuration.isPressed ? 0.86 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
@@ -222,8 +249,16 @@ struct CustomGlassButtonStyle: ButtonStyle {
     var isPrimary: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(isPrimary ? Color.black.opacity(0.85) : OdinStyle.secondaryInk)
+        let primaryTextColor = Color(nsColor: NSColor(name: nil) { appearance in
+            if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+                return NSColor(white: 0.0, alpha: 0.85)
+            } else {
+                return NSColor(white: 1.0, alpha: 0.95)
+            }
+        })
+
+        return configuration.label
+            .foregroundStyle(isPrimary ? primaryTextColor : OdinStyle.secondaryInk)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(

@@ -62,11 +62,9 @@ struct OnboardingView: View {
                     HStack(spacing: 6) {
                         Text(permissions.allGranted ? "Continue" : "Waiting…")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
                         if permissions.allGranted {
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white)
                         }
                     }
                     .frame(width: 120, height: 32)
@@ -79,14 +77,7 @@ struct OnboardingView: View {
             .padding(.vertical, 14)
         }
         .frame(width: 520)
-        .background(
-            NotchShape(cornerRadius: OdinStyle.panelRadius)
-                .fill(OdinStyle.background)
-        )
-        .overlay(
-            NotchBorder(cornerRadius: OdinStyle.panelRadius)
-                .stroke(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.7)
-        )
+        .glassSurface(cornerRadius: OdinStyle.panelRadius)
         .onAppear { permissions.startPolling() }
         .onDisappear { permissions.stopPolling() }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: permissions.allGranted)
@@ -101,17 +92,19 @@ struct OnboardingView: View {
                     .fill(OdinStyle.accent.opacity(0.08))
                     .frame(width: 96, height: 96)
 
-                Image(systemName: "sparkles")
-                    .font(.system(size: 26, weight: .medium))
+                Image("OdinLogo", bundle: .module)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                     .foregroundStyle(OdinStyle.accent)
+                    .frame(width: 32, height: 32)
                     .frame(width: 72, height: 72)
                     .background(
                         Circle()
-                            .fill(Color.white.opacity(0.04))
+                            .fill(OdinStyle.warmCream.opacity(0.04))
                     )
                     .overlay(
                         Circle()
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .strokeBorder(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
                     )
             }
 
@@ -143,11 +136,11 @@ private struct PermissionRow: View {
         HStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.02))
+                    .fill(OdinStyle.warmCream.opacity(0.02))
                     .frame(width: 40, height: 40)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .strokeBorder(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
                     )
 
                 Image(systemName: granted ? "checkmark" : symbol)
@@ -190,8 +183,9 @@ private struct PermissionRow: View {
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: OdinStyle.cardRadius, style: .continuous)
-                .fill(OdinStyle.cardFill)
+                .fill(OdinStyle.warmCream.opacity(0.02))
         )
+        .glassEffect(.regular, in: .rect(cornerRadius: OdinStyle.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: OdinStyle.cardRadius, style: .continuous)
                 .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)

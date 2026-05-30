@@ -14,14 +14,13 @@ struct StatusMenu: View {
         }
         .frame(width: 260)
         .background(OdinStyle.background.opacity(0.85))
-        .preferredColorScheme(.dark)
     }
 
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : Color.white.opacity(0.04))
+                    .fill(runner.isRunning ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
                     .frame(width: 28, height: 28)
                 Image(systemName: "circle.hexagongrid")
                     .resizable()
@@ -54,11 +53,11 @@ struct StatusMenu: View {
                     .padding(.vertical, 3)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.06))
+                            .fill(OdinStyle.warmCream.opacity(0.06))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .stroke(OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
                     )
             }
             .buttonStyle(.plain)
@@ -75,7 +74,7 @@ struct StatusMenu: View {
                 shortcut: compactHotkeyString
             ) {
                 if let appDelegate = NSApp.delegate as? AppDelegate {
-                    appDelegate.toggleMainWindow()
+                    appDelegate.showMainWindow()
                 }
             }
 
@@ -213,7 +212,7 @@ struct StatusMenuButton: View {
                         .padding(.vertical, 1)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.04))
+                                .fill(OdinStyle.warmCream.opacity(0.04))
                         )
                 }
             }
@@ -223,7 +222,7 @@ struct StatusMenuButton: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(isHovering ? Color.white.opacity(0.08) : Color.clear)
+                    .fill(isHovering ? OdinStyle.warmCream.opacity(0.08) : Color.clear)
             )
         }
         .buttonStyle(.plain)

@@ -6,7 +6,6 @@ struct ChatPanel: View {
     @EnvironmentObject private var runner: AgentRunner
 
     @State private var task = ""
-    @State private var hint = ""
     @State private var mode: PillMode = .idle
     @State private var showTrace = false
     @State private var edgeHoverTask: Task<Void, Never>?
@@ -144,12 +143,17 @@ struct ChatPanel: View {
     @ViewBuilder
     private var inputContent: some View {
         if runner.isRunning {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(liveTitle)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(OdinStyle.ink)
                     .lineLimit(1)
-                steerField
+                if !liveSubtitle.isEmpty {
+                    Text(liveSubtitle)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(OdinStyle.secondaryInk)
+                        .lineLimit(1)
+                }
             }
         } else if let approval = runner.pendingApproval {
             VStack(alignment: .leading, spacing: 2) {
@@ -188,27 +192,6 @@ struct ChatPanel: View {
         .frame(height: 24)
         .contentShape(Rectangle())
         .onTapGesture { inputFocused = true }
-    }
-
-    private var steerField: some View {
-        ZStack(alignment: .leading) {
-            if hint.isEmpty {
-                HStack(spacing: 6) {
-                    BlinkingCaret(height: 11)
-                    Text("Steer Odin…")
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(OdinStyle.tertiaryInk)
-                }
-                .allowsHitTesting(false)
-            }
-            TextField("", text: $hint)
-                .textFieldStyle(.plain)
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(OdinStyle.secondaryInk)
-                .tint(OdinStyle.accent)
-                .onSubmit(submitSteeringHint)
-        }
-        .frame(height: 16)
     }
 
     private var trailingControls: some View {
@@ -252,21 +235,15 @@ struct ChatPanel: View {
     @ViewBuilder
     private var primaryButton: some View {
         if runner.isRunning {
-            Button {
-                if hint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    runner.stop()
-                } else {
-                    submitSteeringHint()
-                }
-            } label: {
-                Image(systemName: hint.isEmpty ? "stop.fill" : "arrow.up")
+            Button(action: { runner.stop() }) {
+                Image(systemName: "stop.fill")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(hint.isEmpty ? OdinStyle.red : OdinStyle.ink)
+                    .foregroundStyle(OdinStyle.red)
                     .frame(width: 26, height: 26)
                     .glassEffect(.regular.interactive(), in: .circle)
             }
             .buttonStyle(.plain)
-            .help(hint.isEmpty ? "Stop run" : "Send hint")
+            .help("Stop run")
         } else {
             Button(action: submitTask) {
                 Image(systemName: "arrow.up")
@@ -401,37 +378,23 @@ struct ChatPanel: View {
         showTrace = false
     }
 
-    private func submitSteeringHint() {
-        let trimmed = hint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        runner.steer(hint: trimmed)
-        hint = ""
-    }
 }
 
 private struct BlinkingCaret: View {
     var height: CGFloat = 16
     @State private var visible = true
-    @State private var glow = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+        RoundedRectangle(cornerRadius: 1.0, style: .continuous)
             .fill(OdinStyle.brandGradient)
-            .frame(width: 2.5, height: height)
-            .shadow(color: OdinStyle.accent.opacity(glow ? 0.8 : 0.2), radius: glow ? 4 : 1)
-            .opacity(visible ? 0.9 : 0.1) // Pulsing range instead of absolute on/off
+            .frame(width: 2.0, height: height)
+            .opacity(visible ? 1.0 : 0.0)
             .onAppear {
                 withAnimation(
-                    .easeInOut(duration: 0.6) // Pulsing duration
+                    .linear(duration: 0.5)
                     .repeatForever(autoreverses: true)
                 ) {
                     visible = false
-                }
-                withAnimation(
-                    .easeInOut(duration: 1.1)
-                    .repeatForever(autoreverses: true)
-                ) {
-                    glow = true
                 }
             }
     }
@@ -440,49 +403,50 @@ private struct BlinkingCaret: View {
 private struct OdinMark: View {
     let isActive: Bool
     var size: CGFloat = 18
-    @State private var breath: CGFloat = 1
-    @State private var rotation: Double = 0
+    @State private var breath: CGFloat = 1.0
+    @State private var glowOpacity: Double = 0.5
 
     var body: some View {
         ZStack {
             if isActive {
                 Circle()
-                    .stroke(
-                        OdinStyle.accent,
-                        lineWidth: 1
-                    )
-                    .frame(width: size * 1.3, height: size * 1.3)
-                    .opacity(0.3)
+                    .fill(OdinStyle.accent)
+                    .frame(width: size * 1.25, height: size * 1.25)
+                    .opacity(glowOpacity)
+                    .blur(radius: 2.5)
                     .scaleEffect(breath)
-                    .blur(radius: 1)
-                    .animation(
-                        .easeInOut(duration: 1.4).repeatForever(autoreverses: true),
-                        value: breath
-                    )
-                
-                Circle()
-                    .stroke(
-                        OdinStyle.accent.opacity(0.6),
-                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [4, 6])
-                    )
-                    .frame(width: size, height: size)
-                    .rotationEffect(.degrees(rotation))
-                    .onAppear {
-                        withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                            rotation = 360
-                        }
-                    }
             }
             
-            Circle()
-                .fill(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.8))
-                .frame(width: size * 0.45, height: size * 0.45)
-                .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 4)
+            Image("OdinLogo", bundle: .module)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(isActive ? OdinStyle.accent : OdinStyle.accent.opacity(0.8))
+                .frame(width: size * 0.82, height: size * 0.82)
+                .shadow(color: OdinStyle.accent.opacity(isActive ? 0.6 : 0), radius: 3)
         }
         .frame(width: size * 1.3, height: size * 1.3)
-        .onAppear { if isActive { breath = 1.25 } }
+        .onAppear {
+            if isActive {
+                startAnimating()
+            }
+        }
         .onChange(of: isActive) { _, new in
-            breath = new ? 1.25 : 1
+            if new {
+                startAnimating()
+            } else {
+                breath = 1.0
+                glowOpacity = 0.5
+            }
+        }
+    }
+
+    private func startAnimating() {
+        withAnimation(
+            .easeInOut(duration: 1.1)
+            .repeatForever(autoreverses: true)
+        ) {
+            breath = 1.35
+            glowOpacity = 0.15
         }
     }
 }
