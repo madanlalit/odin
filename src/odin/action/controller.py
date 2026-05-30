@@ -110,14 +110,13 @@ class ActionController:
         """
         return self.click(x, y, button="right")
 
-    def move(self, x: int, y: int, duration: float = 0.25) -> ActionResult:
+    def move(self, x: int, y: int) -> ActionResult:
         """
         Move the mouse cursor to the specified coordinates.
 
         Args:
             x: X coordinate
             y: Y coordinate
-            duration: Time to take for the movement (seconds)
 
         Returns:
             ActionResult indicating success or failure
@@ -187,13 +186,12 @@ class ActionController:
         except Exception as e:
             return ActionResult(success=False, action="drag", error=str(e))
 
-    def type_text(self, text: str, interval: float = 0.02) -> ActionResult:
+    def type_text(self, text: str) -> ActionResult:
         """
         Type text using the keyboard.
 
         Args:
             text: Text to type
-            interval: Delay between keypresses (seconds)
 
         Returns:
             ActionResult indicating success or failure

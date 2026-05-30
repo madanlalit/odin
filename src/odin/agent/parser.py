@@ -60,8 +60,6 @@ class ParsedAction:
 class ParseError(Exception):
     """Error parsing LLM response."""
 
-    pass
-
 
 def _extract_json_object(response: str) -> dict[str, Any]:
     """Extract the most likely JSON object from model output text."""

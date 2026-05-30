@@ -24,7 +24,7 @@ class Screen:
         except PermissionError:
             raise
         except Exception as e:
-            raise RuntimeError(f"Failed to capture screenshot: {e}")
+            raise RuntimeError(f"Failed to capture screenshot: {e}") from e
 
 
     def get_app_context(self) -> dict[str, Any]:

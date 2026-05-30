@@ -18,7 +18,7 @@ class FakeAX:
 
     kAXChildrenAttribute = "AXChildren"
 
-    def AXUIElementCopyActionNames(self, element, error):
+    def AXUIElementCopyActionNames(self, _element, _error):
         return 0, FakeNSArray("AXPress", "AXShowMenu")
 
 
@@ -29,7 +29,7 @@ def test_children_accepts_pyobjc_iterable_collections():
     child_1 = object()
     child_2 = object()
 
-    def fake_copy_attr(element, attr):
+    def fake_copy_attr(_element, _attr):
         return FakeNSArray(child_1, child_2)
 
     accessibility._copy_attr = fake_copy_attr  # type: ignore[method-assign]

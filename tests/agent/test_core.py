@@ -52,7 +52,7 @@ class FakeAccessibility:
         self.focused: list[str] = []
         self.values: list[tuple[str, str]] = []
 
-    def capture(self, *, max_depth: int = 8, max_nodes: int = 120):
+    def capture(self, *, max_depth: int = 8, max_nodes: int = 120):  # noqa: ARG002
         return self.snapshot
 
     def perform_action(self, element_id: str, action_name: str):

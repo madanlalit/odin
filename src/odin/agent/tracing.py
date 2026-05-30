@@ -69,7 +69,7 @@ class NoopTracer:
     run_id: str | None = None
     path: Path | None = None
 
-    def start_run(self, task: str, metadata: dict[str, Any]) -> str:
+    def start_run(self, task: str, metadata: dict[str, Any]) -> str:  # noqa: ARG002
         """Return an empty run ID without recording anything."""
         return ""
 
@@ -84,10 +84,10 @@ class NoopTracer:
 
     def save_image(
         self,
-        image: Image.Image,
+        image: Image.Image,  # noqa: ARG002
         *,
-        step: int,
-        label: str,
+        step: int,  # noqa: ARG002
+        label: str,  # noqa: ARG002
     ) -> str | None:
         """Do not persist image artifacts."""
         return None
