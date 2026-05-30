@@ -185,6 +185,20 @@ class TestParser:
         assert action.params["success"] is True
         assert "Successfully" in action.params["result"]
 
+    def test_parse_drag_action(self):
+        """Test parsing a drag action."""
+        response = _batch_response(
+            _action("drag", {"start_x": 100, "start_y": 200, "end_x": 300, "end_y": 400}),
+            thought="Drag from start to end",
+        )
+        action = parse_llm_actions(response)[0]
+
+        assert action.action == "drag"
+        assert action.params["start_x"] == 100
+        assert action.params["start_y"] == 200
+        assert action.params["end_x"] == 300
+        assert action.params["end_y"] == 400
+
     def test_parse_with_markdown_wrapper(self):
         """Test parsing JSON wrapped in markdown code block."""
         response = """
@@ -403,3 +417,44 @@ class TestValidateActionParams:
         assert valid is False
         assert error is not None
         assert "Direction" in error
+
+    def test_validate_drag_valid(self):
+        """Test valid drag parameters."""
+        action = ParsedAction(
+            thought="test",
+            action="drag",
+            params={"start_x": 10, "start_y": 20, "end_x": 30, "end_y": 40},
+            raw_response="",
+        )
+        valid, error = validate_action_params(action)
+
+        assert valid is True
+        assert error is None
+
+    def test_validate_drag_missing_coordinate(self):
+        """Test drag with missing coordinate."""
+        action = ParsedAction(
+            thought="test",
+            action="drag",
+            params={"start_x": 10, "start_y": 20, "end_x": 30},
+            raw_response="",
+        )
+        valid, error = validate_action_params(action)
+
+        assert valid is False
+        assert error is not None
+        assert "Missing required parameter 'end_y'" in error
+
+    def test_validate_drag_invalid_coordinate_type(self):
+        """Test drag with non-integer coordinates."""
+        action = ParsedAction(
+            thought="test",
+            action="drag",
+            params={"start_x": 10, "start_y": "20", "end_x": 30, "end_y": 40},
+            raw_response="",
+        )
+        valid, error = validate_action_params(action)
+
+        assert valid is False
+        assert error is not None
+        assert "integer" in error.lower()

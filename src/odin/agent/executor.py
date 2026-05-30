@@ -45,6 +45,14 @@ class ActionExecutor:
                     x=params["x"],
                     y=params["y"],
                 )
+            case "drag":
+                return self.action_controller.drag(
+                    start_x=params["start_x"],
+                    start_y=params["start_y"],
+                    end_x=params["end_x"],
+                    end_y=params["end_y"],
+                    duration=params.get("duration", 0.5),
+                )
             case "double_click_element":
                 return self.element_handler.double_click_element(params["element_id"])
             case "focus_element":
@@ -101,6 +109,16 @@ class ActionExecutor:
         if action.action in {"click", "double_click", "move"}:
             x = params.get("x")
             y = params.get("y")
+            if isinstance(x, int | float) and isinstance(y, int | float):
+                return {
+                    "x": int(x),
+                    "y": int(y),
+                    "source": "coordinates",
+                }
+
+        if action.action == "drag":
+            x = params.get("start_x")
+            y = params.get("start_y")
             if isinstance(x, int | float) and isinstance(y, int | float):
                 return {
                     "x": int(x),

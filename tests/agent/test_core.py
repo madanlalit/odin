@@ -247,6 +247,64 @@ class TestAgent:
         ]
 
     @patch("odin.agent.core.Screen")
+    def test_agent_maps_screenshot_coordinates_to_screen_coordinates_for_drag(
+        self, mock_screen_class, mock_llm_client, tmp_path
+    ):
+        """Test model screenshot coordinates are mapped for drag actions before execution."""
+        mock_screen = MagicMock()
+        mock_screen.get_screenshot.return_value = Image.new(
+            "RGB",
+            (3600, 2338),
+            color="white",
+        )
+        mock_screen_class.return_value = mock_screen
+
+        mock_llm_client.analyze_screen.side_effect = [
+            LLMResponse(
+                content=_batch_response(
+                    _action("drag", {"start_x": 841, "start_y": 1049, "end_x": 1000, "end_y": 500}),
+                    thought="Drag file",
+                )
+            ),
+            LLMResponse(
+                content=_batch_response(
+                    _action("done", {"result": "Dragged", "success": True}),
+                    thought="Done",
+                )
+            ),
+        ]
+
+        trace_path = tmp_path / "drag-coordinate-trace.jsonl"
+        config = AgentConfig(
+            step_delay=0,
+            max_screenshot_size=(1663, 1080),
+            trace_path=trace_path,
+        )
+        agent = Agent(mock_llm_client, config=config)
+        agent.action_controller.screen_width = 1800
+        agent.action_controller.screen_height = 1169
+        agent.safety.screen_width = 1800
+        agent.safety.screen_height = 1169
+        agent.action_controller.drag = MagicMock(
+            return_value=ActionResult(
+                success=True,
+                action="drag",
+                message="Dragged",
+            )
+        )
+
+        result = agent.run("Drag file")
+
+        assert result.success is True
+        agent.action_controller.drag.assert_called_once_with(
+            start_x=910,
+            start_y=1135,
+            end_x=1082,
+            end_y=541,
+            duration=0.5,
+        )
+
+    @patch("odin.agent.core.Screen")
     def test_agent_executes_press_element(
         self, mock_screen_class, mock_llm_client, mock_screenshot
     ):

@@ -1,6 +1,6 @@
 """Tests for ActionController bounds and key handling."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from odin.action.controller import ActionController
 

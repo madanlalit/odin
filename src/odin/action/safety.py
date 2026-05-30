@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from odin.action.keys import normalize_keys
+
 from odin.platform.macos import MacOSBackend
 
 
@@ -118,33 +118,3 @@ class SafetyController:
 
         return True, None
 
-    def is_dangerous_action(self, action: str, params: dict) -> bool:
-        """
-        Check if an action is potentially dangerous.
-
-        Dangerous actions might include:
-        - Typing in password fields
-        - Clicking on system dialogs
-        - Executing hotkeys that could delete data
-
-        Args:
-            action: Action name
-            params: Action parameters
-
-        Returns:
-            True if the action is potentially dangerous
-        """
-        if action == "hotkey":
-            keys = params.get("keys", [])
-            dangerous_combos = [
-                {"command", "q"},
-                {"command", "delete"},
-                {"command", "shift", "delete"},
-                {"ctrl", "alt", "delete"},
-            ]
-            key_set = set(normalize_keys(keys)) if isinstance(keys, list) else set()
-            for combo in dangerous_combos:
-                if combo.issubset(key_set):
-                    return True
-
-        return False

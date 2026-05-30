@@ -280,33 +280,6 @@ class ActionController:
             message=f"Waited {seconds} seconds",
         )
 
-    def undo(self, times: int = 1) -> ActionResult:
-        """
-        Send Cmd+Z to undo recent actions.
-
-        Args:
-            times: Number of undo steps
-
-        Returns:
-            ActionResult indicating success or failure
-        """
-        try:
-            self._backend.undo(times=times)
-            return ActionResult(
-                success=True,
-                action="undo",
-                message=f"Undo ×{times}",
-            )
-        except Exception as e:
-            return ActionResult(success=False, action="undo", error=str(e))
-
-    def save_clipboard(self) -> list[tuple]:
-        """Snapshot the current clipboard contents for later restoration."""
-        return self._backend.clipboard_save()
-
-    def restore_clipboard(self, items: list[tuple]) -> None:
-        """Restore previously saved clipboard contents."""
-        self._backend.clipboard_restore(items)
 
     def get_mouse_position(self) -> tuple[int, int]:
         """Get the current mouse position."""

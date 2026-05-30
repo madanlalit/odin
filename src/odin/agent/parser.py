@@ -12,6 +12,7 @@ ActionType = Literal[
     "click",
     "double_click",
     "double_click_element",
+    "drag",
     "move",
     "type",
     "hotkey",
@@ -30,6 +31,7 @@ VALID_ACTIONS: tuple[str, ...] = (
     "click_element",
     "double_click",
     "double_click_element",
+    "drag",
     "focus_element",
     "move",
     "press_element",
@@ -203,6 +205,7 @@ def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
         "click_element": ["element_id"],
         "double_click": ["x", "y"],
         "double_click_element": ["element_id"],
+        "drag": ["start_x", "start_y", "end_x", "end_y"],
         "focus_element": ["element_id"],
         "move": ["x", "y"],
         "press_element": ["element_id"],
@@ -226,6 +229,12 @@ def validate_action_params(action: ParsedAction) -> tuple[bool, str | None]:
         y = action.params.get("y")
         if not isinstance(x, int) or not isinstance(y, int):
             return False, "Coordinates x and y must be integers"
+
+    if action.action == "drag":
+        for param in ("start_x", "start_y", "end_x", "end_y"):
+            val = action.params.get(param)
+            if not isinstance(val, int):
+                return False, f"Coordinate {param} must be an integer"
 
     if action.action == "hotkey":
         keys = action.params.get("keys")

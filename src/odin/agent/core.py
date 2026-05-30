@@ -915,6 +915,8 @@ class Agent:
             coordinate_keys = (("x", "y"),)
         elif action.action == "scroll" and {"x", "y"}.issubset(action.params):
             coordinate_keys = (("x", "y"),)
+        elif action.action == "drag":
+            coordinate_keys = (("start_x", "start_y"), ("end_x", "end_y"))
         else:
             return action
 

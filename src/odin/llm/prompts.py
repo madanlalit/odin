@@ -9,6 +9,7 @@ Actions:
 - set_text: {"element_id":str,"text":str}
 - double_click: {"x":int,"y":int}
 - double_click_element: {"element_id":str}
+- drag: {"start_x":int,"start_y":int,"end_x":int,"end_y":int,"duration"?:number}
 - move: {"x":int,"y":int}
 - type: {"text":str}
 - hotkey: {"keys":[str,...]} (use "command" for the macOS Command key)
@@ -62,7 +63,7 @@ SIMPLE_PROMPT = """\
 Analyze the screenshot and execute actions to complete the task.
 
 Actions: click_element(element_id), press_element(element_id), set_text(element_id,text),
-click(x,y), type(text), hotkey(keys), scroll(direction), done(result,success)
+click(x,y), drag(start_x,start_y,end_x,end_y), type(text), hotkey(keys), scroll(direction), done(result,success)
 
 Respond with JSON: {"thought":"...","actions":[{"action":"...","params":{...}}]}
 """

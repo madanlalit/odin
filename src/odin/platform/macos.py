@@ -9,7 +9,7 @@ text entry via the system clipboard.
 from __future__ import annotations
 
 import time
-from typing import Literal
+from typing import Literal, cast
 
 from PIL import Image
 
@@ -337,25 +337,6 @@ class MacOSBackend:
         return MacOSBackend._cgimage_to_pil(image_ref)
 
     @staticmethod
-    def screenshot_window(window_id: int) -> Image.Image | None:
-        """Capture a specific window by its ``kCGWindowNumber``.
-
-        Returns *None* when the window cannot be captured (e.g. minimised).
-        """
-        Quartz = _load_quartz()
-        bounds = Quartz.CGRectNull
-        image_ref = Quartz.CGWindowListCreateImage(
-            bounds,
-            Quartz.kCGWindowListOptionIncludingWindow,
-            window_id,
-            Quartz.kCGWindowImageBoundsIgnoreFraming,
-        )
-        if image_ref is None:
-            return None
-        return MacOSBackend._cgimage_to_pil(image_ref)
-
-
-    @staticmethod
     def frontmost_app() -> dict[str, str | int | None]:
         """Return info about the frontmost application.
 
@@ -461,37 +442,7 @@ class MacOSBackend:
         windows = MacOSBackend.window_list(for_pid=int(pid))
         if not windows:
             return None
-        return int(windows[0]["window_id"])  # type: ignore[arg-type]
-
-
-    @staticmethod
-    def clipboard_save() -> list[tuple]:
-        """Snapshot the current general pasteboard contents."""
-        AppKit = _load_appkit()
-        pb = AppKit.NSPasteboard.generalPasteboard()
-        items: list[tuple] = []
-        for ptype in pb.types() or []:
-            data = pb.dataForType_(ptype)
-            if data is not None:
-                items.append((ptype, data))
-        return items
-
-    @staticmethod
-    def clipboard_restore(items: list[tuple]) -> None:
-        """Restore previously saved pasteboard contents."""
-        AppKit = _load_appkit()
-        pb = AppKit.NSPasteboard.generalPasteboard()
-        pb.clearContents()
-        for ptype, pdata in items:
-            pb.setData_forType_(pdata, ptype)
-
-
-    @classmethod
-    def undo(cls, times: int = 1) -> None:
-        """Send Cmd+Z *times* times."""
-        for _ in range(times):
-            cls.hotkey("command", "z")
-            time.sleep(0.05)
+        return cast(int, windows[0]["window_id"])
 
 
     @staticmethod

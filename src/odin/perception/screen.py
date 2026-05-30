@@ -26,16 +26,6 @@ class Screen:
         except Exception as e:
             raise RuntimeError(f"Failed to capture screenshot: {e}")
 
-    def get_focused_window_screenshot(self) -> Image.Image | None:
-        """Capture only the focused application's window.
-
-        Returns *None* when the window cannot be identified or captured.
-        Falls back to a full-screen capture internally if needed.
-        """
-        window_id = self._backend.focused_window_id()
-        if window_id is None:
-            return None
-        return self._backend.screenshot_window(window_id)
 
     def get_app_context(self) -> dict[str, Any]:
         """Return context about open apps and windows across macOS Spaces.
