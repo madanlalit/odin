@@ -2,34 +2,34 @@ import SwiftUI
 import AppKit
 
 enum OdinStyle {
-    // Brand colors from the warm palette
-    static let accent = Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange (#FF9644)
-    static let accentSecondary = Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange (#FFCE99)
-    static let gold = Color(red: 1.0, green: 0.808, blue: 0.60) // Warm gold (#FFCE99)
+    // Brand colors: Monochromatic palette
+    static let accent = Color.white // Monochromatic white
+    static let accentSecondary = Color(white: 0.90) // Soft silver
+    static let gold = Color(white: 0.90) // Soft silver
 
-    static let green = Color(red: 1.0, green: 0.808, blue: 0.60) // Light Orange (#FFCE99)
-    static let red = Color(red: 1.0, green: 0.588, blue: 0.267) // Vibrant Orange (#FF9644)
+    static let green = Color(red: 0.2, green: 0.82, blue: 0.38) // Clean green
+    static let red = Color(red: 1.0, green: 0.23, blue: 0.18) // Clean red
 
-    // Deep espresso dark brown background (#0C0600)
-    static let background = Color(red: 0.05, green: 0.03, blue: 0.0)
+    // Dark neutral background
+    static let background = Color(white: 0.06)
 
-    // Warm Cream base (#FFFDF1)
-    static let warmCream = Color(red: 1.0, green: 0.992, blue: 0.945)
+    // Neutral base tint
+    static let warmCream = Color.white
 
-    static let ink = warmCream.opacity(0.96)
-    static let secondaryInk = warmCream.opacity(0.74)
-    static let tertiaryInk = warmCream.opacity(0.48)
-    static let separator = warmCream.opacity(0.08)
+    static let ink = warmCream.opacity(0.94)
+    static let secondaryInk = warmCream.opacity(0.68)
+    static let tertiaryInk = warmCream.opacity(0.42)
+    static let separator = warmCream.opacity(0.06)
 
     // Sizing
     static let panelRadius: CGFloat = 22
     static let cardRadius: CGFloat = 12
     static let chipRadius: CGFloat = 12
 
-    static let cardFill = warmCream.opacity(0.04)
-    static let cardFillHover = warmCream.opacity(0.08)
+    static let cardFill = warmCream.opacity(0.05)
+    static let cardFillHover = warmCream.opacity(0.10)
     static let cardStroke = warmCream.opacity(0.08)
-    static let cardStrokeHover = warmCream.opacity(0.16)
+    static let cardStrokeHover = warmCream.opacity(0.14)
 
     static var brandGradient: Color {
         accent
@@ -133,14 +133,14 @@ struct NotchSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         let borderColor = isAccented ?
-            OdinStyle.accent.opacity(0.3) :
-            OdinStyle.warmCream.opacity(0.08)
-        let strokeWidth: CGFloat = isIdle ? 1.2 : 0.7
+            OdinStyle.accent.opacity(0.24) :
+            OdinStyle.warmCream.opacity(0.06)
+        let strokeWidth: CGFloat = isIdle ? 1.0 : 0.5
 
         return content
             .background(
                 NotchShape(cornerRadius: cornerRadius)
-                    .fill(OdinStyle.background.opacity(0.78))
+                    .fill(OdinStyle.background.opacity(0.30))
             )
             .glassEffect(.regular, in: NotchShape(cornerRadius: cornerRadius))
             .overlay(
@@ -192,10 +192,10 @@ extension View {
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.black.opacity(0.85)) // Dark text for white/silver background
             .background(OdinStyle.brandGradient)
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .shadow(color: OdinStyle.accent.opacity(0.24), radius: 6, y: 2)
+            .shadow(color: Color.black.opacity(0.12), radius: 6, y: 2)
             .opacity(configuration.isPressed ? 0.86 : 1)
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
@@ -223,7 +223,7 @@ struct CustomGlassButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(isPrimary ? .white : OdinStyle.secondaryInk)
+            .foregroundStyle(isPrimary ? Color.black.opacity(0.85) : OdinStyle.secondaryInk)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(
@@ -255,12 +255,12 @@ extension ButtonStyle where Self == CustomGlassButtonStyle {
 
 struct ScaleOnHover: ViewModifier {
     @State private var isHovering = false
-    var scale: CGFloat = 1.02
+    var scale: CGFloat = 1.015 // Softened from 1.02
 
     func body(content: Content) -> some View {
         content
             .scaleEffect(isHovering ? scale : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: isHovering)
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovering) // Smoother spring transition
             .onHover { hovering in
                 isHovering = hovering
             }
@@ -268,7 +268,7 @@ struct ScaleOnHover: ViewModifier {
 }
 
 extension View {
-    func scaleOnHover(scale: CGFloat = 1.02) -> some View {
+    func scaleOnHover(scale: CGFloat = 1.015) -> some View {
         modifier(ScaleOnHover(scale: scale))
     }
 }

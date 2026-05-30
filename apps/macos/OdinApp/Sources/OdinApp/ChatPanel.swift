@@ -414,10 +414,10 @@ private struct BlinkingCaret: View {
             .fill(OdinStyle.brandGradient)
             .frame(width: 2.5, height: height)
             .shadow(color: OdinStyle.accent.opacity(glow ? 0.8 : 0.2), radius: glow ? 4 : 1)
-            .opacity(visible ? 1 : 0)
+            .opacity(visible ? 0.9 : 0.1) // Pulsing range instead of absolute on/off
             .onAppear {
                 withAnimation(
-                    .easeInOut(duration: 0.55)
+                    .easeInOut(duration: 0.6) // Pulsing duration
                     .repeatForever(autoreverses: true)
                 ) {
                     visible = false
