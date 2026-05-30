@@ -28,11 +28,13 @@ struct StatusMenu: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(statusLine)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(statusColor)
-                    .lineLimit(2)
-                    .frame(maxWidth: 150, alignment: .leading)
+                if statusLine != "Ready" {
+                    Text(statusLine)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(statusColor)
+                        .lineLimit(2)
+                        .frame(maxWidth: 150, alignment: .leading)
+                }
             }
 
             Spacer()
