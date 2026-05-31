@@ -12,7 +12,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Odin",
-            path: "Sources/OdinApp",
+            path: "Sources/Odin",
             resources: [
                 .process("Assets.xcassets"),
                 .process("OdinLogo.png"),
