@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck run build-app run-app clean reset help
+.PHONY: install dev test lint format typecheck run build-app run-app bundle-app clean reset help
 
 help:
 	@echo "Available targets:"
@@ -39,13 +39,22 @@ run:
 	uv run python -m odin
 
 build-app:
-	swift build --package-path apps/macos/OdinApp
+	swift build --package-path apps/macos/Odin
 
 run-app:
-	swift run --package-path apps/macos/OdinApp Odin
+	swift run --package-path apps/macos/Odin Odin
+
+bundle-app:
+	@echo "1. Preparing embedded Python runtime and site-packages..."
+	./scripts/bundle_python.sh
+	@echo "2. Compiling SwiftUI macOS App Shell in Release mode..."
+	swift build -c release --package-path apps/macos/Odin
+	@echo "3. Assembling standard macOS App bundle..."
+	./scripts/build_app_bundle.sh
+	@echo "4. Application bundled successfully inside dist/Odin.dmg!"
 
 clean:
-	rm -rf .traces .pytest_cache .mypy_cache .ruff_cache __pycache__ apps/macos/OdinApp/.build
+	rm -rf .traces .pytest_cache .mypy_cache .ruff_cache __pycache__ apps/macos/Odin/.build .build
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	find . -name ".DS_Store" -delete 2>/dev/null || true
