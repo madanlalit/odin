@@ -28,7 +28,7 @@ graph TD
 
 - **ReAct Loop**: Reason + Act pattern for intelligent automation
 - **Vision LLM**: Supports optional OpenRouter and AWS Bedrock providers
-- **macOS Accessibility Context**: Sends a compact AX tree alongside screenshots
+- **Screen Context**: Sends active app info, window lists, mouse position, and accessibility tree alongside screenshots
 - **Element Actions**: Press, click, focus, set text, and scroll by accessibility ID
 - **CoreGraphics Fallbacks**: Coordinate click, type, scroll, hotkeys, and more
 - **Safety Layer**: Rate limiting, bounds checking, dangerous action detection
@@ -49,36 +49,21 @@ uv sync --extra bedrock
 
 ## Setup
 
-1. Install an LLM provider extra. For OpenRouter:
+Configure your LLM provider credentials:
 
-```bash
-uv sync --extra openrouter
-```
+- **OpenRouter**: Set your API key in the environment or in a local `.env` file:
+  ```bash
+  export OPENROUTER_API_KEY="your-api-key"
+  ```
+- **AWS Bedrock**: Configure standard AWS SDK credentials and region:
+  ```bash
+  export ODIN_LLM_PROVIDER=bedrock
+  export AWS_REGION="us-east-1"
+  ```
 
-2. Get an API key from [OpenRouter](https://openrouter.ai/) and set it:
-
-```bash
-export OPENROUTER_API_KEY="your-api-key"
-```
-
-For AWS Bedrock instead, install the optional extra and use standard AWS SDK
-credentials:
-
-```bash
-uv sync --extra bedrock
-export ODIN_LLM_PROVIDER=bedrock
-export AWS_REGION="us-east-1"
-```
-
-Then pass a Bedrock model ID when needed:
-
-```bash
-uv run python -m odin "Open Safari" --provider bedrock --model us.anthropic.claude-opus-4-7
-```
-
-3. Grant permissions (macOS):
-   - **Screen Recording**: System Settings → Privacy & Security → Screen Recording
-   - **Accessibility**: System Settings → Privacy & Security → Accessibility
+Grant permissions (macOS):
+- **Screen Recording**: System Settings → Privacy & Security → Screen Recording
+- **Accessibility**: System Settings → Privacy & Security → Accessibility
 
 ## Usage
 
@@ -146,22 +131,22 @@ config = AgentConfig(
 agent = Agent(llm, config=config)
 ```
 
-## Accessibility
+## Screen Context & Accessibility
 
-On macOS, Odin captures the focused app/window accessibility tree and sends a
-compact element list to the model alongside the screenshot. Elements include IDs,
-roles, labels, values, frames, focus state, and native AX actions when available.
+Alongside the screenshot, Odin compiles a structured, prompt-safe text context detailing the system state. This context includes:
 
-The model can use element-based actions:
+1. **Coordinate System**: The resolution of the screenshot and display size, helping the model align clicks correctly.
+2. **Mouse Position**: The active coordinates of the mouse pointer.
+3. **App Context**: Information about the frontmost application, running user-facing apps, window bounds, and visible windows across spaces.
+4. **macOS Accessibility Tree (AX Tree)**: A hierarchy of UI elements (up to `accessibility_max_nodes` limits) including roles, labels, values, states (focused/enabled), native actions, and frames.
+
+The model can utilize element-based actions directly referencing accessibility IDs:
 
 ```json
 {"thought": "The Submit button is visible.", "actions": [{"action": "press_element", "params": {"element_id": "ax_12"}}]}
 ```
 
-Supported element actions include `click_element`, `double_click_element`,
-`press_element`, `focus_element`, `set_text`, and `scroll_element`. Odin tries
-native AX actions first where possible and falls back to the element frame center
-using Quartz mouse/keyboard events when appropriate.
+Supported element actions include `click_element`, `double_click_element`, `press_element`, `focus_element`, `set_text`, and `scroll_element`. Odin tries native AX actions first where possible and falls back to the element frame center using Quartz mouse/keyboard events when appropriate.
 
 ## Tracing
 
