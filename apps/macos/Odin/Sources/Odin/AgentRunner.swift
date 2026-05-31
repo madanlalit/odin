@@ -93,17 +93,80 @@ final class AgentRunner: ObservableObject {
         let stdin = Pipe()
         let stdout = Pipe()
         let stderr = Pipe()
-        let tracePath = makeTracePath(repoPath: settings.repoPath)
+
+        var isBundled = false
+        var pythonURL: URL? = nil
+        if let bundledPythonURL = Bundle.main.url(forResource: "python/bin/python3", withExtension: nil) {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: bundledPythonURL.path),
+               let size = attrs[.size] as? UInt64,
+               size > 1000 {
+                isBundled = true
+                pythonURL = bundledPythonURL
+            }
+        }
+
+        let tracePath = makeTracePath(repoPath: settings.repoPath, isBundled: isBundled)
         progress.tracePath = tracePath
 
-        process.executableURL = URL(fileURLWithPath: settings.pythonPath)
-        process.currentDirectoryURL = URL(fileURLWithPath: settings.repoPath)
-        process.environment = settings.environment()
-        process.arguments = buildArguments(
-            task: task,
-            settings: settings,
-            tracePath: tracePath
-        )
+        if isBundled, let pythonURL {
+            process.executableURL = pythonURL
+            process.currentDirectoryURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+            
+            let resourcePath = Bundle.main.resourcePath!
+            var env = ProcessInfo.processInfo.environment
+            env["PYTHONPATH"] = "\(resourcePath)/src:\(resourcePath)/site-packages"
+            env["PYTHONUNBUFFERED"] = "1"
+            env["PYTHONIOENCODING"] = "utf-8"
+            
+            env["ODIN_LLM_PROVIDER"] = settings.provider.rawValue
+            env["AWS_REGION"] = settings.awsRegion
+            env["AWS_DEFAULT_REGION"] = settings.awsRegion
+            env["AWS_REGION_NAME"] = settings.awsRegion
+
+            let key = settings.apiKey()
+            if !key.isEmpty {
+                if settings.provider == .openrouter {
+                    env["OPENROUTER_API_KEY"] = key
+                } else if settings.provider == .bedrock {
+                    env["BEDROCK_API_KEY"] = key
+                }
+            }
+
+            let awsAccessKeyId = settings.awsAccessKeyId()
+            let awsSecretKey = settings.awsSecretAccessKey()
+            let awsSessionToken = settings.awsSessionToken()
+
+            if !awsAccessKeyId.isEmpty { env["AWS_ACCESS_KEY_ID"] = awsAccessKeyId }
+            if !awsSecretKey.isEmpty { env["AWS_SECRET_ACCESS_KEY"] = awsSecretKey }
+            if !awsSessionToken.isEmpty { env["AWS_SESSION_TOKEN"] = awsSessionToken }
+
+            let lines = settings.customEnv.split(separator: "\n")
+            for line in lines {
+                let parts = line.split(separator: "=", maxSplits: 1)
+                if parts.count == 2 {
+                    let k = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                    let v = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !k.isEmpty {
+                        env[k] = v
+                    }
+                }
+            }
+            process.environment = env
+            process.arguments = buildArguments(
+                task: task,
+                settings: settings,
+                tracePath: tracePath
+            )
+        } else {
+            process.executableURL = URL(fileURLWithPath: settings.pythonPath)
+            process.currentDirectoryURL = URL(fileURLWithPath: settings.repoPath)
+            process.environment = settings.environment()
+            process.arguments = buildArguments(
+                task: task,
+                settings: settings,
+                tracePath: tracePath
+            )
+        }
         process.standardOutput = stdout
         process.standardError = stderr
         process.standardInput = stdin
@@ -293,6 +356,8 @@ final class AgentRunner: ObservableObject {
 
         return args
     }
+
+
 
     private func consumeStdout(_ text: String) {
         stdoutBuffer += text
@@ -834,8 +899,14 @@ final class AgentRunner: ObservableObject {
         return "\(x), \(y)"
     }
 
-    private func makeTracePath(repoPath: String) -> String {
-        let traces = URL(fileURLWithPath: repoPath).appendingPathComponent(".traces")
+    private func makeTracePath(repoPath: String, isBundled: Bool) -> String {
+        let traces: URL
+        if isBundled || repoPath.isEmpty {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? FileManager.default.temporaryDirectory
+            traces = appSupport.appendingPathComponent("Odin/Traces")
+        } else {
+            traces = URL(fileURLWithPath: repoPath).appendingPathComponent(".traces")
+        }
         try? FileManager.default.createDirectory(at: traces, withIntermediateDirectories: true)
 
         let formatter = DateFormatter()
