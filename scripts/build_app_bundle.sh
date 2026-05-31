@@ -65,6 +65,10 @@ cat <<EOF > "${APP_BUNDLE}/Contents/Info.plist"
 </plist>
 EOF
 
+# 5b. Codesign the entire App Bundle ad-hoc to seal the bundle and resources
+echo "=== Codesigning Odin.app ad-hoc ==="
+codesign --force --deep --sign - "${APP_BUNDLE}"
+
 # 6. Create macOS Disk Image (DMG) for drag-and-drop installer
 echo "=== Building macOS Disk Image (DMG) ==="
 DMG_ROOT="${REPO_ROOT}/.build/dmg_root"

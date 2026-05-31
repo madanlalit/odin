@@ -111,6 +111,17 @@ make bundle-app
 
 This compiles the Swift application in release mode, downloads and embeds a relocatable Python runtime and pip dependencies into the bundle resources, packages everything into a drag-and-drop installer `dist/Odin.dmg`, and automatically cleans up intermediate build files.
 
+#### Installing & Running the App
+
+Since the app is signed ad-hoc, macOS Gatekeeper blocks it with a quarantine attribute when it's copied from a DMG. To install and start the app:
+
+1. Double-click `dist/Odin.dmg` and drag `Odin.app` into your **Applications** folder.
+2. Open your terminal and clear the quarantine attribute:
+   ```bash
+   xattr -cr /Applications/Odin.app
+   ```
+3. Run `Odin` from Applications or Spotlight.
+
 ## Configuration
 
 ```python
