@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/odin_logo.png" alt="Odin Logo" width="400">
+  <img src="docs/assets/odin_logo.png" alt="Odin Logo" width="100%">
   <br>
   <em>AI-powered computer automation agent using vision LLMs.</em>
   <br><br>
@@ -104,18 +104,27 @@ print(f"Steps: {result.total_steps}")
 
 ## macOS App Shell
 
-Odin includes a SwiftUI development app with a minimal Spotlight-style chat
-window. Provider, model, API key, AWS region, and local runtime settings live in
-the Odin menu bar icon:
+Odin includes a SwiftUI native menu-bar application with a Spotlight-style chat interface. All provider configuration, API keys, and custom parameters are managed directly from the menu bar settings.
+
+### Development Mode
+
+To run the application locally in developer mode:
 
 ```bash
-cd apps/macos/OdinApp
-swift run OdinApp
+# Run using Swift Package Manager
+swift run --package-path apps/macos/Odin Odin
 ```
 
-The app stores provider keys in macOS Keychain and launches the Python agent via
-`python -m odin.app_runner`, which streams structured JSONL events back to the
-compact status line.
+### Standalone Packaging
+
+To bundle the application into a self-contained, standard macOS app with an embedded standalone Python runtime and dependencies:
+
+```bash
+# Build the standalone Odin.dmg installer
+make bundle-app
+```
+
+This compiles the Swift application in release mode, downloads and embeds a relocatable Python runtime and pip dependencies into the bundle resources, packages everything into a drag-and-drop installer `dist/Odin.dmg`, and automatically cleans up intermediate build files.
 
 ## Configuration
 
