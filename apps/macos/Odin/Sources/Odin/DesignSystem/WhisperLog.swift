@@ -158,22 +158,32 @@ private struct WhisperRow: View {
                     .font(OdinTokens.Font.bodyEm)
                     .foregroundStyle(OdinTokens.Color.ink)
                     .lineLimit(1)
-                if let detail = entry.detail, !detail.isEmpty {
+                if !isExpanded, let detail = entry.detail, !detail.isEmpty {
                     Text(detail)
                         .font(OdinTokens.Font.body)
                         .foregroundStyle(OdinTokens.Color.ink2)
-                        .lineLimit(isExpanded ? nil : 1)
+                        .lineLimit(1)
                         .truncationMode(.tail)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 if isExpandable {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(isExpanded ? OdinTokens.Color.amber : OdinTokens.Color.ink4)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 10)
+                    // Explicit "Show more / Show less" affordance on
+                    // each row. The whole row is still clickable as a
+                    // convenience, but the button is the discoverable
+                    // action — it makes clear that something can be
+                    // expanded, which a chevron alone doesn't.
+                    Button(isExpanded ? "Show less" : "Show more") {
+                        onTap()
+                    }
+                    .buttonStyle(.odinText)
                 }
+            }
+            if isExpanded, let detail = entry.detail, !detail.isEmpty {
+                Text(detail)
+                    .font(OdinTokens.Font.body)
+                    .foregroundStyle(OdinTokens.Color.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
