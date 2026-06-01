@@ -31,8 +31,7 @@ struct OdinPanelSurface: ViewModifier {
     }
 }
 
-/// A 0.5pt hairline divider. Replaces the dozen ad-hoc
-/// `Rectangle().fill(OdinStyle.separator).frame(height: 0.5)` instances.
+/// A 0.5pt hairline divider used between sections in the panel.
 struct Hairline: View {
     var leading: CGFloat = 0
     var trailing: CGFloat = 0

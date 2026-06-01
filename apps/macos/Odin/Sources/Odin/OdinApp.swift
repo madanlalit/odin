@@ -12,11 +12,13 @@ struct OdinDesktopApp: App {
             StatusMenu()
                 .environmentObject(appDelegate.settings)
                 .environmentObject(appDelegate.runner)
-                .tint(OdinStyle.accent)
+                .tint(OdinTokens.Color.amber)
         } label: {
-            if let img = IconLoader.resizedLogo(height: 18, horizontalPadding: 6) {
-                Image(nsImage: img)
-            }
+            // The eye is the menu-bar mark. Same rune iris as the
+            // Stage, sized to fit the standard menu-bar height. Stays
+            // amber in idle; the chat panel carries state colors.
+            EyeRuneMark(state: menuBarEyeState, size: 18)
+                .frame(width: 24, height: 20)
         }
         .menuBarExtraStyle(.window)
 
@@ -24,8 +26,25 @@ struct OdinDesktopApp: App {
             SettingsView()
                 .environmentObject(appDelegate.settings)
                 .environmentObject(appDelegate.permissions)
-                .tint(OdinStyle.accent)
+                .tint(OdinTokens.Color.amber)
         }
+    }
+
+    /// State for the menu-bar eye. Mirrors the agent so the icon
+    /// reads idle / watching / awaiting / done / error at a glance.
+    private var menuBarEyeState: OdinEye.State {
+        let runner = appDelegate.runner
+        if runner.isRunning {
+            return runner.pendingApproval != nil ? .awaiting : .watching
+        }
+        if let last = runner.lastResult {
+            switch last.level {
+            case .success: return .done
+            case .warning, .error: return .error
+            case .info: return .idle
+            }
+        }
+        return .idle
     }
 }
 
@@ -102,9 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func setupPanel() {
         let rootView = Group {
-            if CommandLine.arguments.contains("--mark-gallery") {
-                StageMarkGallery()
-            } else if permissions.allGranted {
+            if permissions.allGranted {
                 ChatPanel()
             } else {
                 OnboardingView()
@@ -113,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         .environmentObject(settings)
         .environmentObject(runner)
         .environmentObject(permissions)
-        .tint(OdinStyle.accent)
+        .tint(OdinTokens.Color.amber)
 
         let panel = OdinPanel(
             contentRect: NSRect(x: 0, y: 0, width: 540, height: 200),

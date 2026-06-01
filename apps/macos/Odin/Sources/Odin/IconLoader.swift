@@ -1,59 +1,15 @@
 import AppKit
-import SwiftUI
 
+/// Loads the app icon (used for the Dock tile and Finder preview).
+/// The status-bar mark is now `EyeRuneMark` in `StageMark.swift`; this
+/// loader is only here for `NSApp.applicationIconImage`.
 enum IconLoader {
-
     static func appIcon(pointSize: Int = 512) -> NSImage? {
         loadFromBundle(
             imageset: "AppIcon.appiconset",
             baseName: "icon_\(pointSize)x\(pointSize)",
             fallbackBaseName: "icon_256x256"
         )
-    }
-
-    /// Loads the OdinLogo template image from the bundle resources.
-    /// This bypasses the asset catalog (which SPM doesn't compile) and
-    /// loads the loose OdinLogo.png file directly.
-    static func logo() -> NSImage? {
-        // Try the loose resource file first (added via .process("OdinLogo.png"))
-        if let img = Bundle.module.image(forResource: "OdinLogo") {
-            img.isTemplate = true
-            return img
-        }
-        // Fallback: try the imageset directory
-        let assetDir = Bundle.module.resourceURL?
-            .appendingPathComponent("Assets.xcassets")
-            .appendingPathComponent("OdinLogo.imageset")
-        if let dir = assetDir {
-            let url = dir.appendingPathComponent("logo.png")
-            if let img = NSImage(contentsOf: url) {
-                img.isTemplate = true
-                return img
-            }
-        }
-        return nil
-    }
-
-    static func resizedLogo(height: CGFloat, horizontalPadding: CGFloat = 0) -> NSImage? {
-        guard let originalImage = logo() else { return nil }
-        let aspectRatio = originalImage.size.width / originalImage.size.height
-        let targetSize = NSSize(width: height * aspectRatio, height: height)
-        
-        let canvasSize = NSSize(width: targetSize.width + 2 * horizontalPadding, height: height)
-        let newImage = NSImage(size: canvasSize)
-        
-        newImage.lockFocus()
-        let rect = NSRect(
-            x: horizontalPadding,
-            y: 0,
-            width: targetSize.width,
-            height: targetSize.height
-        )
-        originalImage.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
-        newImage.unlockFocus()
-        
-        newImage.isTemplate = true
-        return newImage
     }
 
     private static func loadFromBundle(
@@ -99,29 +55,3 @@ enum IconLoader {
         return bundle.url(forResource: name, withExtension: "png")
     }
 }
-
-struct OdinLogoImage: View {
-    var height: CGFloat? = nil
-
-    var body: some View {
-        if let originalImage = IconLoader.logo() {
-            if let height = height {
-                let nsImage: NSImage = {
-                    let copy = originalImage.copy() as! NSImage
-                    let aspectRatio = originalImage.size.width / originalImage.size.height
-                    copy.size = NSSize(width: height * aspectRatio, height: height)
-                    copy.isTemplate = true
-                    return copy
-                }()
-                Image(nsImage: nsImage)
-                    .renderingMode(.template)
-            } else {
-                Image(nsImage: originalImage)
-                    .renderingMode(.template)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            }
-        }
-    }
-}
-
