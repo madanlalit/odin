@@ -151,36 +151,9 @@ struct StatusMenu: View {
 
 
     private var compactHotkeyString: String {
-        let keyCode = settings.hotkeyKeyCode
         let modifierFlags = NSEvent.ModifierFlags(rawValue: UInt(settings.hotkeyModifiers))
-        
-        var parts = ""
-        if modifierFlags.contains(.control) { parts += "⌃" }
-        if modifierFlags.contains(.option) { parts += "⌥" }
-        if modifierFlags.contains(.shift) { parts += "⇧" }
-        if modifierFlags.contains(.command) { parts += "⌘" }
-        
-        parts += keyName(for: UInt16(keyCode))
-        return parts
-    }
-
-    private func keyName(for keyCode: UInt16) -> String {
-        switch keyCode {
-        case 36: return "↩"
-        case 48: return "⇥"
-        case 49: return "Space"
-        case 51: return "⌫"
-        case 53: return "⎋"
-        case 123: return "←"
-        case 124: return "→"
-        case 125: return "↓"
-        case 126: return "↑"
-        default:
-            if let char = KeyMap.char(for: keyCode) {
-                return char.uppercased()
-            }
-            return "\(keyCode)"
-        }
+        return HotkeyFormatter.modifierSymbols(modifierFlags)
+            + HotkeyFormatter.symbol(for: UInt16(settings.hotkeyKeyCode))
     }
 }
 

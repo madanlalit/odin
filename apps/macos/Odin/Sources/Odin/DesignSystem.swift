@@ -141,13 +141,11 @@ struct NotchBorder: Shape {
 struct NotchSurface: ViewModifier {
     var cornerRadius: CGFloat = OdinStyle.panelRadius
     var isAccented: Bool = false
-    var isIdle: Bool = false
 
     func body(content: Content) -> some View {
         let borderColor = isAccented ?
             OdinStyle.accent.opacity(0.24) :
             OdinStyle.warmCream.opacity(0.06)
-        let strokeWidth: CGFloat = isIdle ? 1.0 : 0.5
 
         return content
             .background(
@@ -157,7 +155,7 @@ struct NotchSurface: ViewModifier {
             .glassEffect(.regular, in: NotchShape(cornerRadius: cornerRadius))
             .overlay(
                 NotchBorder(cornerRadius: cornerRadius)
-                    .stroke(borderColor, lineWidth: strokeWidth)
+                    .stroke(borderColor, lineWidth: 0.5)
             )
     }
 }
@@ -165,13 +163,11 @@ struct NotchSurface: ViewModifier {
 extension View {
     func notchSurface(
         cornerRadius: CGFloat = OdinStyle.panelRadius,
-        isAccented: Bool = false,
-        isIdle: Bool = false
+        isAccented: Bool = false
     ) -> some View {
         modifier(NotchSurface(
             cornerRadius: cornerRadius,
-            isAccented: isAccented,
-            isIdle: isIdle
+            isAccented: isAccented
         ))
     }
 

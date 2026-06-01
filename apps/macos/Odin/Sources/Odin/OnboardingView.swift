@@ -40,18 +40,6 @@ struct OnboardingView: View {
                 .frame(height: 0.5)
 
             HStack {
-                Button("Refresh") {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                        permissions.refresh()
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(OdinStyle.secondaryInk)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .scaleOnHover()
-
                 Spacer()
 
                 Button {

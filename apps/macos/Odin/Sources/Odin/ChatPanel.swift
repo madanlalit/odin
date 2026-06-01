@@ -6,50 +6,16 @@ struct ChatPanel: View {
     @EnvironmentObject private var runner: AgentRunner
 
     @State private var task = ""
-    @State private var mode: PillMode = .idle
     @State private var showTrace = false
-    @State private var edgeHoverTask: Task<Void, Never>?
-    @State private var isPointerOverVisiblePill = false
     @FocusState private var inputFocused: Bool
-
-    enum PillMode {
-        case idle
-        case hover
-        case live
-        case open
-    }
-
-    static let morph = Animation.spring(response: 0.38, dampingFraction: 0.82)
-    static let popOut = Animation.spring(response: 0.30, dampingFraction: 0.68)
-
-    private var notchPopTransition: AnyTransition {
-        .asymmetric(
-            insertion: .opacity
-                .combined(with: .offset(y: -10))
-                .combined(with: .scale(scale: 0.82, anchor: .top)),
-            removal: .opacity
-                .combined(with: .offset(y: -8))
-                .combined(with: .scale(scale: 0.92, anchor: .top))
-        )
-    }
-
-    private var resolvedMode: PillMode {
-        return .open
-    }
-
-    private var pillWidth: CGFloat {
-        return 540
-    }
 
     var body: some View {
         openPill
-            .frame(width: pillWidth, alignment: .top)
+            .frame(width: 540, alignment: .top)
             .notchSurface(
                 cornerRadius: OdinStyle.panelRadius,
-                isAccented: runner.isRunning || runner.pendingApproval != nil,
-                isIdle: false
+                isAccented: runner.isRunning || runner.pendingApproval != nil
             )
-        .transition(notchPopTransition)
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 inputFocused = true
