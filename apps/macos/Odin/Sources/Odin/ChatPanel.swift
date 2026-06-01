@@ -35,6 +35,7 @@ struct ChatPanel: View {
                 if whisperLogExpanded {
                     WhisperLog(entries: whisperEntries)
                         .frame(maxHeight: whisperLogHeight)
+                        .clipped()
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .top)),
                             removal: .opacity
