@@ -45,6 +45,7 @@ struct WhisperLogDisclosure: View {
 
 /// The WhisperLog — a vertical list of the agent's recent actions.
 /// Each entry shows the time, an action verb, and (when known) a target.
+/// Rows with a long `detail` are clickable to expand in place.
 struct WhisperLog: View {
     struct Entry: Identifiable, Equatable {
         let id = UUID()
@@ -57,6 +58,10 @@ struct WhisperLog: View {
 
     let entries: [Entry]
     var maxVisible: Int = OdinTokens.Size.whisperMaxLines
+
+    // One row at a time. Avoids a log that grows without bound when
+    // every step has a long detail the user is investigating.
+    @SwiftUI.State private var expandedID: UUID? = nil
 
     private var visible: [Entry] {
         Array(entries.suffix(maxVisible))
@@ -72,11 +77,26 @@ struct WhisperLog: View {
                         entry: entry,
                         isFirst: index == 0,
                         isLast: index == visible.count - 1,
-                        isCurrent: index == visible.count - 1
+                        isCurrent: index == visible.count - 1,
+                        isExpanded: expandedID == entry.id,
+                        isExpandable: hasExpandableDetail(entry),
+                        onTap: { toggle(entry.id) }
                     )
                 }
             }
         }
+    }
+
+    private func hasExpandableDetail(_ entry: Entry) -> Bool {
+        guard let detail = entry.detail, !detail.isEmpty else { return false }
+        // Heuristic: a detail is expandable if it's long enough that
+        // a single line wouldn't show it all. 60 chars is roughly the
+        // width of a row with the timeline rail + time + title.
+        return detail.count > 60
+    }
+
+    private func toggle(_ id: UUID) {
+        expandedID = (expandedID == id) ? nil : id
     }
 
     private var emptyState: some View {
@@ -99,41 +119,63 @@ private struct WhisperRow: View {
     let isFirst: Bool
     let isLast: Bool
     let isCurrent: Bool
+    let isExpanded: Bool
+    let isExpandable: Bool
+    let onTap: () -> Void
 
     @SwiftUI.State private var hovering: Bool = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: OdinTokens.Space.s12) {
+        // Only the row's content area is tappable. The timeline rail
+        // stays passive so the user can still hover the dot for context
+        // (e.g. a tooltip with the full timestamp) without triggering
+        // expand on every stray click.
+        HStack(alignment: .top, spacing: OdinTokens.Space.s12) {
             timelineRail
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: OdinTokens.Space.s6) {
-                    Text(timeLabel)
-                        .font(OdinTokens.Font.mono)
-                        .foregroundStyle(OdinTokens.Color.ink4)
-                    Text(entry.title)
-                        .font(OdinTokens.Font.bodyEm)
-                        .foregroundStyle(OdinTokens.Color.ink)
-                        .lineLimit(1)
-                    if let detail = entry.detail, !detail.isEmpty {
-                        Text(detail)
-                            .font(OdinTokens.Font.body)
-                            .foregroundStyle(OdinTokens.Color.ink2)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
+            content
+                .contentShape(Rectangle())
+                .onTapGesture(perform: isExpandable ? onTap : {})
         }
         .padding(.horizontal, OdinTokens.Space.s20)
-        .padding(.vertical, OdinTokens.Space.s4)
+        .padding(.vertical, isExpanded ? OdinTokens.Space.s8 : OdinTokens.Space.s4)
         .background(
             Rectangle()
                 .fill(hovering ? OdinTokens.Color.surfaceHover : .clear)
         )
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
         .animation(OdinMotion.current.snap, value: hovering)
+        .animation(OdinMotion.current.rise, value: isExpanded)
+        .onHover { hovering = $0 }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: OdinTokens.Space.s6) {
+                Text(timeLabel)
+                    .font(OdinTokens.Font.mono)
+                    .foregroundStyle(OdinTokens.Color.ink4)
+                Text(entry.title)
+                    .font(OdinTokens.Font.bodyEm)
+                    .foregroundStyle(OdinTokens.Color.ink)
+                    .lineLimit(1)
+                if let detail = entry.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(OdinTokens.Font.body)
+                        .foregroundStyle(OdinTokens.Color.ink2)
+                        .lineLimit(isExpanded ? nil : 1)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                if isExpandable {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(isExpanded ? OdinTokens.Color.amber : OdinTokens.Color.ink4)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                }
+            }
+        }
     }
 
     private var timelineRail: some View {
@@ -157,6 +199,7 @@ private struct WhisperRow: View {
                 .opacity(isLast ? 0 : 1)
         }
         .frame(width: 14)
+        .padding(.top, 6)  // aligns the dot with the row's text baseline
     }
 
     private var dotColor: Color {
