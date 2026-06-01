@@ -51,8 +51,6 @@ struct ChatPanel: View {
 
     private var openPill: some View {
         VStack(alignment: .leading, spacing: 0) {
-            inputRegion
-
             if let approval = runner.pendingApproval {
                 Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
                 ApprovalRegion(
@@ -61,7 +59,11 @@ struct ChatPanel: View {
                     skip: { runner.respondToPendingApproval(approved: false) },
                     stop: { runner.stop() }
                 )
-            } else if runner.isRunning {
+            }
+
+            inputRegion
+
+            if runner.pendingApproval == nil, runner.isRunning {
                 Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
                 ProgressHairline(fraction: progressFraction)
                     .padding(.top, -1)
@@ -72,7 +74,7 @@ struct ChatPanel: View {
                 ErrorBanner(message: lastResult, dismiss: { runner.lastResult = nil })
             }
 
-            if !pinnedAndRecents.isEmpty && !runner.isRunning {
+            if !pinnedAndRecents.isEmpty && !runner.isRunning && runner.pendingApproval == nil {
                 Rectangle().fill(OdinStyle.separator).frame(height: 0.5)
                 recentsRow
             }
@@ -120,16 +122,6 @@ struct ChatPanel: View {
                         .foregroundStyle(OdinStyle.secondaryInk)
                         .lineLimit(1)
                 }
-            }
-        } else if let approval = runner.pendingApproval {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Approval needed")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(OdinStyle.ink)
-                Text(approval.actionTitle)
-                    .font(.system(size: 11.5, weight: .regular))
-                    .foregroundStyle(OdinStyle.secondaryInk)
-                    .lineLimit(1)
             }
         } else {
             taskField
@@ -262,6 +254,11 @@ struct ChatPanel: View {
             }
         } label: {
             HStack(spacing: 4) {
+                if runner.pendingApproval != nil && !showTrace {
+                    Circle()
+                        .fill(OdinStyle.gold)
+                        .frame(width: 5, height: 5)
+                }
                 Image(systemName: showTrace ? "chevron.up" : "chevron.down")
                     .font(.system(size: 8, weight: .bold))
                 Text(showTrace ? "Hide trace" : "\(runner.messages.count) steps")
@@ -701,9 +698,11 @@ private struct ApprovalRegion: View {
     let skip: () -> Void
     let stop: () -> Void
 
+    @State private var isExpanded = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(OdinStyle.cardFill)
@@ -717,22 +716,55 @@ private struct ApprovalRegion: View {
                         .foregroundStyle(OdinStyle.ink)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text("Odin wants to \(approvalSentence)")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(OdinStyle.ink)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-
                     Text(approvalContext)
                         .font(.system(size: 11, weight: .regular))
                         .foregroundStyle(OdinStyle.secondaryInk)
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
+
+                Button(action: allow) {
+                    Text("Allow")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 64, height: 26)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .keyboardShortcut(.return, modifiers: [])
+
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(OdinStyle.tertiaryInk)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(OdinStyle.warmCream.opacity(isExpanded ? 0.10 : 0.04)))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(isExpanded ? "Hide details" : "Show details")
             }
 
+            if isExpanded {
+                expandedDetails
+                    .padding(.top, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(16)
+    }
+
+    private var expandedDetails: some View {
+        VStack(alignment: .leading, spacing: 12) {
             if let thought = approval.thought, !thought.isEmpty {
                 Text(thought)
                     .font(.system(size: 11.5, weight: .regular))
@@ -761,13 +793,6 @@ private struct ApprovalRegion: View {
             }
 
             HStack(spacing: 8) {
-                Button(action: stop) {
-                    Text("Stop run")
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 88, height: 28)
-                }
-                .buttonStyle(SoftButtonStyle())
-
                 Spacer()
 
                 Button(action: skip) {
@@ -778,16 +803,15 @@ private struct ApprovalRegion: View {
                 .buttonStyle(SoftButtonStyle())
                 .keyboardShortcut(.escape, modifiers: [])
 
-                Button(action: allow) {
-                    Text("Allow")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 96, height: 28)
+                Button(action: stop) {
+                    Text("Stop run")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(width: 88, height: 28)
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut(.return, modifiers: [])
+                .buttonStyle(DestructiveButtonStyle())
+                .keyboardShortcut(".", modifiers: .command)
             }
         }
-        .padding(16)
     }
 
     private var actionSymbol: String {
@@ -797,7 +821,7 @@ private struct ApprovalRegion: View {
         case "type", "set_text": return "keyboard"
         case "hotkey": return "command"
         case "scroll", "scroll_element": return "arrow.up.arrow.down"
-        default: return "exclamationmark.triangle"
+        default: return "arrow.up.right.circle"
         }
     }
 

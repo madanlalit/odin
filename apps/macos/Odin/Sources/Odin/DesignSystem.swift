@@ -240,6 +240,21 @@ struct SoftButtonStyle: ButtonStyle {
     }
 }
 
+struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(OdinStyle.red)
+            .background(OdinStyle.warmCream.opacity(0.04))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(OdinStyle.red.opacity(0.18), lineWidth: 0.5)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .opacity(configuration.isPressed ? 0.86 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+    }
+}
+
 struct CustomGlassButtonStyle: ButtonStyle {
     var cornerRadius: CGFloat = 8
     var isPrimary: Bool = false
