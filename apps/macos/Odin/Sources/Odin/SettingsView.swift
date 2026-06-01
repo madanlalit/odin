@@ -1,244 +1,190 @@
 import SwiftUI
 import AppKit
 
+/// Odin Settings — one focused window, four logical sections, all using
+/// the unified `OdinField` / `OdinSegmentedPicker` / `OdinToggle` family.
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var permissions: PermissionManager
-    @State private var apiKey = ""
-    @State private var awsAccessKeyId = ""
-    @State private var awsSecretKey = ""
-    @State private var awsSessionToken = ""
-    @State private var savedFlash = false
-    @State private var savedAwsCredentials = false
+
+    @SwiftUI.State private var apiKey: String = ""
+    @SwiftUI.State private var awsAccessKeyId: String = ""
+    @SwiftUI.State private var awsSecretKey: String = ""
+    @SwiftUI.State private var awsSessionToken: String = ""
+    @SwiftUI.State private var savedFlash: Bool = false
+    @SwiftUI.State private var savedAwsCredentials: Bool = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                // Top margin to avoid overlapping with window control buttons (traffic lights)
-                Spacer().frame(height: 16)
+            VStack(alignment: .leading, spacing: OdinTokens.Space.s24) {
+                Spacer().frame(height: OdinTokens.Space.s20)
 
-                Text("Odin Settings")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(OdinStyle.ink)
-                    .padding(.bottom, -8)
+                hero
 
                 generalPane
                 modelPane
                 permissionsPane
                 advancedPane
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
-        }
-        .frame(width: 520, height: 600)
-        .glassSurface(cornerRadius: OdinStyle.panelRadius)
-        .onAppear {
-            apiKey = settings.apiKey()
-            awsAccessKeyId = settings.awsAccessKeyId()
-            awsSecretKey = settings.awsSecretAccessKey()
-            awsSessionToken = settings.awsSessionToken()
-            permissions.startPolling()
 
-            DispatchQueue.main.async {
-                if let window = NSApp.windows.first(where: {
-                    $0.title == "Odin Settings" ||
-                    $0.identifier?.rawValue == "Settings" ||
-                    $0.className.contains("SettingsWindow") ||
-                    ($0.contentView?.subviews.first?.description.contains("SettingsView") ?? false)
-                }) {
-                    window.isOpaque = false
-                    window.backgroundColor = .clear
-                    window.titlebarAppearsTransparent = true
-                    window.titleVisibility = .hidden
-                    window.hasShadow = true
+                footer
+            }
+            .padding(.horizontal, OdinTokens.Space.s24)
+            .padding(.bottom, OdinTokens.Space.s24)
+        }
+        .frame(width: 560, height: 640)
+        .odinPanelSurface(radius: OdinTokens.R.window)
+        .onAppear { onAppear() }
+        .onDisappear { permissions.stopPolling() }
+        .onChange(of: settings.provider) { _, _ in syncKeysFromKeychain() }
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: OdinTokens.Space.s4) {
+            HStack(spacing: OdinTokens.Space.s10) {
+                OdinEye(state: .idle, size: 28, animated: false)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Odin Settings")
+                        .font(OdinTokens.Font.hero)
+                        .foregroundStyle(OdinTokens.Color.ink)
+                    Text("Shape how Odin watches and acts.")
+                        .font(OdinTokens.Font.body)
+                        .foregroundStyle(OdinTokens.Color.ink2)
                 }
+                Spacer()
+                OdinChip(
+                    text: "v0.6.0",
+                    style: .neutral,
+                    mono: true,
+                    height: 22
+                )
             }
-        }
-        .onDisappear {
-            permissions.stopPolling()
-        }
-        .onChange(of: settings.provider) { _, _ in
-            apiKey = settings.apiKey()
-            awsAccessKeyId = settings.awsAccessKeyId()
-            awsSecretKey = settings.awsSecretAccessKey()
-            awsSessionToken = settings.awsSessionToken()
         }
     }
 
-    private func settingsSectionHeader(title: String, subtitle: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(OdinStyle.accent)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(OdinStyle.secondaryInk)
-            }
-        }
-        .padding(.bottom, 2)
-    }
+    // MARK: - General
 
     private var generalPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            settingsSectionHeader(
-                title: "General",
-                subtitle: "Provider, credentials, and how Odin connects to your model."
-            )
-
-            groupCard {
-                rowSegmented(
-                    label: "Provider",
-                    selection: $settings.provider,
-                    options: Provider.allCases.map { ($0, $0.displayName) }
-                )
-
-                rowDivider
-
-                HStack(spacing: 12) {
-                    rowLabel("API Key")
-                    SecureField(settings.provider == .openrouter ? "sk-or-…" : "API Key / Token", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(saveKey)
-                    primaryActionButton(
-                        title: savedFlash ? "Saved" : "Save",
-                        isDisabled: apiKey.isEmpty,
-                        action: saveKey
+        section("General", subtitle: "Provider, credentials, and how Odin connects to your model.") {
+            VStack(spacing: 0) {
+                row {
+                    OdinRowLabel(text: "Provider")
+                    OdinSegmentedPicker(
+                        selection: $settings.provider,
+                        options: Provider.allCases,
+                        label: { Text($0.displayName) }
                     )
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
+                hairline()
+                row {
+                    OdinRowLabel(text: "API Key")
+                    OdinField(
+                        placeholder: settings.provider == .openrouter ? "sk-or-…" : "API Key / Token",
+                        text: $apiKey,
+                        secure: true,
+                        onSubmit: saveKey
+                    )
+                    saveButton(title: savedFlash ? "Saved" : "Save",
+                               enabled: !apiKey.isEmpty,
+                               action: saveKey)
+                }
                 if settings.provider == .bedrock {
-                    rowDivider
-
-                    HStack(spacing: 12) {
-                        rowLabel("AWS Region")
-                        TextField("us-east-1", text: $settings.awsRegion)
-                            .textFieldStyle(.roundedBorder)
+                    hairline()
+                    row {
+                        OdinRowLabel(text: "AWS Region")
+                        OdinField(placeholder: "us-east-1", text: $settings.awsRegion)
+                        Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    rowDivider
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("AWS CREDENTIALS (KEYCHAIN)")
-                            .font(.system(size: 9.5, weight: .bold))
-                            .foregroundStyle(OdinStyle.tertiaryInk)
-                            .tracking(0.8)
-                            .padding(.top, 4)
-
-                        HStack(spacing: 12) {
-                            rowLabel("Access Key ID")
-                            SecureField("AWS_ACCESS_KEY_ID", text: $awsAccessKeyId)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        HStack(spacing: 12) {
-                            rowLabel("Secret Key")
-                            SecureField("AWS_SECRET_ACCESS_KEY", text: $awsSecretKey)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        HStack(spacing: 12) {
-                            rowLabel("Session Token")
-                            SecureField("AWS_SESSION_TOKEN (Optional)", text: $awsSessionToken)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        HStack {
-                            Spacer()
-                            primaryActionButton(
-                                title: savedAwsCredentials ? "Saved" : "Save AWS Credentials",
-                                isDisabled: awsAccessKeyId.isEmpty && awsSecretKey.isEmpty,
-                                action: saveAwsCredentialsAction
-                            )
-                        }
-                        .padding(.top, 4)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    hairline()
+                    awsCredentialsBlock
                 }
-
-                rowDivider
-
-                HStack(spacing: 12) {
-                    rowLabel("Status")
+                hairline()
+                row {
+                    OdinRowLabel(text: "Status")
                     HStack(spacing: 6) {
-                        Circle()
-                            .fill(credentialsConfigured ? OdinStyle.accent : OdinStyle.tertiaryInk)
-                            .frame(width: 7, height: 7)
+                        OdinDot(color: credentialsConfigured
+                                ? OdinTokens.Color.success
+                                : OdinTokens.Color.amber, size: 7)
                         Text(credentialsConfigured ? "Ready" : "Needs configuration")
-                            .font(.system(size: 12))
-                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .font(OdinTokens.Font.body)
+                            .foregroundStyle(OdinTokens.Color.ink2)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-                rowDivider
-
-                ShortcutRecorderView()
+                hairline()
+                row {
+                    OdinRowLabel(text: "Global Hotkey")
+                    ShortcutRecorderView()
+                    Spacer()
+                }
             }
-
+            .odinCard()
             footnote("Keys and secrets are stored securely in macOS Keychain.")
         }
     }
 
-    private var credentialsConfigured: Bool {
-        switch settings.provider {
-        case .openrouter:
-            return !settings.apiKey().isEmpty
-        case .bedrock:
-            return !settings.awsRegion.isEmpty && (!settings.awsAccessKeyId().isEmpty || !settings.apiKey().isEmpty)
+    private var awsCredentialsBlock: some View {
+        VStack(alignment: .leading, spacing: OdinTokens.Space.s8) {
+            Text("AWS CREDENTIALS")
+                .font(OdinTokens.Font.micro)
+                .foregroundStyle(OdinTokens.Color.ink3)
+                .padding(.top, OdinTokens.Space.s4)
+            HStack {
+                OdinRowLabel(text: "Access Key ID", width: 132)
+                OdinField(placeholder: "AWS_ACCESS_KEY_ID", text: $awsAccessKeyId, secure: true)
+            }
+            HStack {
+                OdinRowLabel(text: "Secret Key", width: 132)
+                OdinField(placeholder: "AWS_SECRET_ACCESS_KEY", text: $awsSecretKey, secure: true)
+            }
+            HStack {
+                OdinRowLabel(text: "Session Token", width: 132)
+                OdinField(placeholder: "AWS_SESSION_TOKEN (Optional)", text: $awsSessionToken, secure: true)
+            }
+            HStack {
+                Spacer()
+                saveButton(title: savedAwsCredentials ? "Saved" : "Save AWS Credentials",
+                           enabled: !awsAccessKeyId.isEmpty || !awsSecretKey.isEmpty,
+                           action: saveAwsCredentials)
+            }
+            .padding(.top, OdinTokens.Space.s4)
         }
+        .padding(.horizontal, OdinTokens.Space.s16)
+        .padding(.vertical, OdinTokens.Space.s12)
     }
 
+    // MARK: - Model
+
     private var modelPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            settingsSectionHeader(
-                title: "Model",
-                subtitle: "Pick the vision-capable model Odin uses to reason about the screen."
-            )
-
-            groupCard {
-                HStack(spacing: 12) {
-                    rowLabel("Model ID")
-                    TextField(defaultModelHint, text: $settings.model)
-                        .textFieldStyle(.roundedBorder)
+        section("Model", subtitle: "Pick the vision-capable model Odin uses to reason about the screen.") {
+            VStack(spacing: 0) {
+                row {
+                    OdinRowLabel(text: "Model ID")
+                    OdinField(placeholder: defaultModelHint, text: $settings.model, mono: true)
+                    Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-                rowDivider
-
-                HStack(spacing: 12) {
-                    rowLabel("Effective")
+                hairline()
+                row {
+                    OdinRowLabel(text: "Effective")
                     VStack(alignment: .leading, spacing: 2) {
                         Text(settings.modelAlias)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(OdinStyle.ink)
+                            .font(OdinTokens.Font.bodyEm)
+                            .foregroundStyle(OdinTokens.Color.ink)
                         Text(settings.effectiveModel)
-                            .font(.system(size: 10.5, design: .monospaced))
-                            .foregroundStyle(OdinStyle.secondaryInk)
+                            .font(OdinTokens.Font.mono)
+                            .foregroundStyle(OdinTokens.Color.ink2)
                             .textSelection(.enabled)
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
             }
-
-            VStack(alignment: .leading, spacing: 8) {
+            .odinCard()
+            if !settings.suggestedModels.isEmpty {
                 Text("SUGGESTED MODELS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
-                    .tracking(0.8)
-                    .padding(.top, 4)
-                
-                VStack(spacing: 6) {
+                    .font(OdinTokens.Font.micro)
+                    .foregroundStyle(OdinTokens.Color.ink3)
+                    .padding(.top, OdinTokens.Space.s8)
+                VStack(spacing: OdinTokens.Space.s6) {
                     ForEach(settings.suggestedModels) { suggestion in
                         suggestedModelRow(suggestion)
                     }
@@ -247,41 +193,142 @@ struct SettingsView: View {
         }
     }
 
-    private func suggestedModelRow(_ suggestion: AppSettings.ModelSuggestion) -> some View {
-        let isSelected = settings.effectiveModel == suggestion.modelID
-        return Button {
-            settings.model = suggestion.modelID
-        } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(suggestion.alias)
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(isSelected ? OdinStyle.ink : OdinStyle.secondaryInk)
-                    Text(suggestion.modelID)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(OdinStyle.tertiaryInk)
+    // MARK: - Permissions
+
+    private var permissionsPane: some View {
+        section("Permissions", subtitle: "Odin needs to see your screen and control your Mac to operate.") {
+            VStack(spacing: 0) {
+                permissionRow(
+                    title: "Screen Recording",
+                    description: "Lets Odin capture screenshots of what you're looking at.",
+                    granted: permissions.hasScreenRecording,
+                    onAction: openScreenRecording
+                )
+                hairline()
+                permissionRow(
+                    title: "Accessibility",
+                    description: "Lets Odin click, type, and read interface elements.",
+                    granted: permissions.hasAccessibility,
+                    onAction: openAccessibility
+                )
+            }
+            .odinCard()
+            footnote("Granting permissions opens System Settings. Status updates automatically once you toggle them on.")
+        }
+    }
+
+    // MARK: - Advanced
+
+    private var advancedPane: some View {
+        section("Advanced", subtitle: "Limits, safety, tracing, and accessibility preferences.") {
+            VStack(spacing: 0) {
+                row {
+                    OdinRowLabel(text: "Max steps")
+                    Spacer()
+                    stepperButton(value: $settings.maxSteps, in: 1...500)
                 }
-                Spacer()
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(OdinStyle.accent)
+                hairline()
+                row {
+                    OdinRowLabel(text: "Max actions / batch")
+                    Spacer()
+                    stepperButton(value: $settings.maxBatchActions, in: 1...20)
+                }
+                hairline()
+                row {
+                    OdinRowLabel(text: "Confirm every action")
+                    Spacer()
+                    Toggle("", isOn: $settings.requireActionApproval)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                        .tint(OdinTokens.Color.amber)
+                        .controlSize(.small)
+                }
+                hairline()
+                row {
+                    OdinRowLabel(text: "Reduce motion")
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { OdinMotion.reduceMotion },
+                        set: { OdinMotion.reduceMotion = $0 }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .tint(OdinTokens.Color.amber)
+                    .controlSize(.small)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isSelected ? OdinStyle.accent.opacity(0.06) : OdinStyle.warmCream.opacity(0.02))
-            )
-            .glassEffect(.regular, in: .rect(cornerRadius: 9))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(isSelected ? OdinStyle.accent.opacity(0.24) : OdinStyle.cardStroke, lineWidth: 0.5)
-            )
-            .contentShape(Rectangle())
+            .odinCard()
+
+            subSection("TRACING", spacing: OdinTokens.Space.s6) {
+                VStack(spacing: 0) {
+                    row {
+                        OdinRowLabel(text: "Working directory")
+                        Text(abbreviatedRepoPath)
+                            .font(OdinTokens.Font.mono)
+                            .foregroundStyle(OdinTokens.Color.ink2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 220, alignment: .trailing)
+                        Button("Choose…") { pickFolder(into: $settings.repoPath) }
+                            .buttonStyle(.odinText)
+                    }
+                    hairline()
+                    row {
+                        OdinRowLabel(text: "Save screenshots with traces")
+                        Spacer()
+                        Toggle("", isOn: $settings.traceScreenshots)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .tint(OdinTokens.Color.amber)
+                            .controlSize(.small)
+                    }
+                }
+                .odinCard()
+            }
+
+            subSection("CUSTOM ENVIRONMENT VARIABLES", spacing: OdinTokens.Space.s6) {
+                VStack(alignment: .leading, spacing: OdinTokens.Space.s8) {
+                    Text("Add KEY=VALUE pairs, one per line. Available to the agent at runtime.")
+                        .font(OdinTokens.Font.body)
+                        .foregroundStyle(OdinTokens.Color.ink2)
+                    OdinTextArea(placeholder: "EXAMPLE_API_KEY=…", text: $settings.customEnv)
+                }
+                .padding(OdinTokens.Space.s14)
+                .background(
+                    RoundedRectangle(cornerRadius: OdinTokens.R.card, style: .continuous)
+                        .fill(OdinTokens.Color.surfaceRaised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: OdinTokens.R.card, style: .continuous)
+                        .stroke(OdinTokens.Color.hairline, lineWidth: 0.5)
+                )
+            }
         }
-        .buttonStyle(.plain)
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack {
+            Spacer()
+            Text("Built for macOS 26 · Liquid Glass")
+                .font(OdinTokens.Font.mono)
+                .foregroundStyle(OdinTokens.Color.ink4)
+            Spacer()
+        }
+        .padding(.top, OdinTokens.Space.s12)
+    }
+
+    // MARK: - Helpers
+
+    private var credentialsConfigured: Bool {
+        switch settings.provider {
+        case .openrouter:
+            return !settings.apiKey().isEmpty
+        case .bedrock:
+            return !settings.awsRegion.isEmpty &&
+                (!settings.awsAccessKeyId().isEmpty || !settings.apiKey().isEmpty)
+        }
     }
 
     private var defaultModelHint: String {
@@ -289,277 +336,6 @@ struct SettingsView: View {
         case .openrouter: return "minimax/minimax-m3"
         case .bedrock: return ""
         }
-    }
-
-    private var permissionsPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            settingsSectionHeader(
-                title: "Permissions",
-                subtitle: "Odin needs to see your screen and control your Mac to operate."
-            )
-
-            groupCard {
-                permissionRow(
-                    title: "Screen Recording",
-                    description: "Lets Odin capture screenshots of what you're looking at.",
-                    granted: permissions.hasScreenRecording,
-                    onGrant: PermissionManager.requestScreenRecording,
-                    onSettings: PermissionManager.openScreenRecordingSettings
-                )
-                rowDivider
-                permissionRow(
-                    title: "Accessibility",
-                    description: "Lets Odin click, type, and read interface elements.",
-                    granted: permissions.hasAccessibility,
-                    onGrant: PermissionManager.requestAccessibility,
-                    onSettings: PermissionManager.openAccessibilitySettings
-                )
-            }
-
-            footnote("Granting permissions opens System Settings. Status updates automatically once you toggle them on.")
-        }
-    }
-
-    private func permissionRow(
-        title: String,
-        description: String,
-        granted: Bool,
-        onGrant: @escaping () -> Void,
-        onSettings: @escaping () -> Void
-    ) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: granted ? "checkmark" : "exclamationmark")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(granted ? OdinStyle.accent : OdinStyle.tertiaryInk)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(granted ? OdinStyle.accent.opacity(0.12) : OdinStyle.warmCream.opacity(0.04))
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(granted ? OdinStyle.accent.opacity(0.3) : OdinStyle.warmCream.opacity(0.08), lineWidth: 0.5)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(OdinStyle.ink)
-                Text(description)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(OdinStyle.secondaryInk)
-            }
-
-            Spacer()
-
-            if granted {
-                Text("Granted")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(OdinStyle.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(OdinStyle.accent.opacity(0.12))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(OdinStyle.accent.opacity(0.3), lineWidth: 0.5)
-                    )
-            } else {
-                primaryActionButton(title: "Grant", isDisabled: false) {
-                    onGrant(); onSettings()
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-    }
-
-    private var advancedPane: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            settingsSectionHeader(
-                title: "Advanced",
-                subtitle: "Limits, safety, and tracing for power users."
-            )
-
-            groupCard {
-                advancedStepper(label: "Max steps", value: $settings.maxSteps, range: 1...500)
-                rowDivider
-                advancedStepper(label: "Max actions / batch", value: $settings.maxBatchActions, range: 1...20)
-                rowDivider
-                rowToggle(label: "Confirm every action", isOn: $settings.requireActionApproval)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("TRACING")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
-                    .tracking(0.8)
-                    .padding(.top, 4)
-
-                groupCard {
-                    HStack(spacing: 12) {
-                        rowLabel("Working Directory")
-                        Text(abbreviatedRepoPath)
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(OdinStyle.secondaryInk)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Spacer()
-                        Button("Choose…") { pickFolder(into: $settings.repoPath) }
-                            .controlSize(.small)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-
-                    rowDivider
-
-                    rowToggle(label: "Save screenshots with traces", isOn: $settings.traceScreenshots)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("CUSTOM ENVIRONMENT VARIABLES")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
-                    .tracking(0.8)
-                    .padding(.top, 4)
-
-                groupCard {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Add custom environment variables (e.g. KEY=VALUE), one per line:")
-                            .font(.system(size: 11))
-                            .foregroundStyle(OdinStyle.secondaryInk)
-                        TextEditor(text: $settings.customEnv)
-                            .font(.system(size: 11, design: .monospaced))
-                            .frame(height: 80)
-                            .cornerRadius(6)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(OdinStyle.warmCream.opacity(0.1), lineWidth: 0.5)
-                            )
-                    }
-                    .padding(16)
-                }
-            }
-
-            HStack {
-                Spacer()
-                Text("Odin · v0.6.0")
-                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
-                Spacer()
-            }
-            .padding(.top, 8)
-        }
-    }
-
-    private func footnote(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11))
-            .foregroundStyle(OdinStyle.tertiaryInk)
-            .padding(.horizontal, 4)
-    }
-
-    private func rowLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12.5, weight: .medium))
-            .frame(width: 120, alignment: .leading)
-            .foregroundStyle(OdinStyle.secondaryInk)
-    }
-
-    private func groupCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(spacing: 0) { content() }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(OdinStyle.warmCream.opacity(0.02))
-            )
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(OdinStyle.cardStroke, lineWidth: 0.5)
-            )
-    }
-
-    private var rowDivider: some View {
-        Rectangle()
-            .fill(OdinStyle.separator)
-            .frame(height: 0.5)
-            .padding(.leading, 16)
-    }
-
-    private func rowSegmented<T: Hashable>(
-        label: String,
-        selection: Binding<T>,
-        options: [(T, String)]
-    ) -> some View {
-        HStack(spacing: 12) {
-            rowLabel(label)
-            Picker("", selection: selection) {
-                ForEach(options, id: \.0) { option in
-                    Text(option.1).tag(option.0)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 280)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func advancedStepper(
-        label: String,
-        value: Binding<Int>,
-        range: ClosedRange<Int>
-    ) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(OdinStyle.secondaryInk)
-            Spacer()
-            Text("\(value.wrappedValue)")
-                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                .foregroundStyle(OdinStyle.ink)
-                .frame(width: 48, alignment: .trailing)
-            Stepper("", value: value, in: range)
-                .labelsHidden()
-                .frame(width: 50)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func rowToggle(label: String, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: 12) {
-            Text(label)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(OdinStyle.secondaryInk)
-            Spacer()
-            Toggle("", isOn: isOn)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .controlSize(.small)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func primaryActionButton(
-        title: String,
-        isDisabled: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 4)
-        }
-        .buttonStyle(.brandGlass)
-        .controlSize(.regular)
-        .disabled(isDisabled)
     }
 
     private var abbreviatedRepoPath: String {
@@ -570,29 +346,195 @@ struct SettingsView: View {
         return settings.repoPath
     }
 
-    private func saveKey() {
-        settings.setAPIKey(apiKey)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            savedFlash = true
+    // MARK: - Builders
+
+    @ViewBuilder
+    private func section<Content: View>(
+        _ title: String,
+        subtitle: String,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: OdinTokens.Space.s10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(OdinTokens.Font.title)
+                    .foregroundStyle(OdinTokens.Color.ink)
+                Text(subtitle)
+                    .font(OdinTokens.Font.body)
+                    .foregroundStyle(OdinTokens.Color.ink2)
+            }
+            content()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                savedFlash = false
+    }
+
+    @ViewBuilder
+    private func subSection<Content: View>(
+        _ eyebrow: String,
+        spacing: CGFloat,
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            Text(eyebrow)
+                .font(OdinTokens.Font.micro)
+                .foregroundStyle(OdinTokens.Color.ink3)
+                .padding(.top, OdinTokens.Space.s4)
+            content()
+        }
+    }
+
+    private func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: OdinTokens.Space.s12) {
+            content()
+        }
+        .padding(.horizontal, OdinTokens.Space.s16)
+        .padding(.vertical, OdinTokens.Space.s12)
+    }
+
+    private func hairline() -> some View {
+        Rectangle()
+            .fill(OdinTokens.Color.hairline)
+            .frame(height: 0.5)
+            .padding(.leading, OdinTokens.Space.s16)
+    }
+
+    private func footnote(_ text: String) -> some View {
+        Text(text)
+            .font(OdinTokens.Font.caption)
+            .foregroundStyle(OdinTokens.Color.ink3)
+            .padding(.horizontal, OdinTokens.Space.s4)
+            .padding(.top, OdinTokens.Space.s2)
+    }
+
+    private func saveButton(title: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.odinSoft)
+            .disabled(!enabled)
+    }
+
+    private func stepperButton(value: Binding<Int>, in range: ClosedRange<Int>) -> some View {
+        HStack(spacing: OdinTokens.Space.s8) {
+            Text("\(value.wrappedValue)")
+                .font(OdinTokens.Font.mono)
+                .foregroundStyle(OdinTokens.Color.ink)
+                .frame(width: 40, alignment: .trailing)
+            Stepper("", value: value, in: range)
+                .labelsHidden()
+                .controlSize(.small)
+        }
+    }
+
+    private func permissionRow(
+        title: String,
+        description: String,
+        granted: Bool,
+        onAction: @escaping () -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: OdinTokens.Space.s12) {
+            ZStack {
+                Circle()
+                    .fill(granted ? OdinTokens.Color.success.opacity(0.12) : OdinTokens.Color.surfaceRaised)
+                    .frame(width: 32, height: 32)
+                Image(systemName: granted ? "checkmark" : "exclamationmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(granted ? OdinTokens.Color.success : OdinTokens.Color.amber)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(OdinTokens.Font.bodyEm)
+                    .foregroundStyle(OdinTokens.Color.ink)
+                Text(description)
+                    .font(OdinTokens.Font.caption)
+                    .foregroundStyle(OdinTokens.Color.ink2)
+            }
+            Spacer()
+            if granted {
+                OdinChip(text: "Granted", style: .success, height: 22)
+            } else {
+                Button("Grant", action: onAction)
+                    .buttonStyle(.odinSoft)
+            }
+        }
+        .padding(.horizontal, OdinTokens.Space.s16)
+        .padding(.vertical, OdinTokens.Space.s12)
+    }
+
+    private func suggestedModelRow(_ suggestion: AppSettings.ModelSuggestion) -> some View {
+        let isSelected = settings.effectiveModel == suggestion.modelID
+        return Button {
+            settings.model = suggestion.modelID
+        } label: {
+            HStack(spacing: OdinTokens.Space.s10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(suggestion.alias)
+                        .font(OdinTokens.Font.bodyEm)
+                        .foregroundStyle(isSelected ? OdinTokens.Color.ink : OdinTokens.Color.ink2)
+                    Text(suggestion.modelID)
+                        .font(OdinTokens.Font.mono)
+                        .foregroundStyle(OdinTokens.Color.ink3)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(OdinTokens.Color.amber)
+                }
+            }
+            .padding(.horizontal, OdinTokens.Space.s14)
+            .padding(.vertical, OdinTokens.Space.s10)
+            .background(
+                RoundedRectangle(cornerRadius: OdinTokens.R.card, style: .continuous)
+                    .fill(isSelected ? OdinTokens.Color.amberSoft : OdinTokens.Color.surfaceRaised)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: OdinTokens.R.card, style: .continuous)
+                    .stroke(isSelected ? OdinTokens.Color.amberLine : OdinTokens.Color.hairline,
+                            lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Lifecycle
+
+    private func onAppear() {
+        syncKeysFromKeychain()
+        permissions.startPolling()
+        DispatchQueue.main.async {
+            for window in NSApp.windows where window.title == "Odin Settings"
+                || window.identifier?.rawValue == "Settings"
+                || window.className.contains("SettingsWindow")
+                || (window.contentView?.subviews.first?.description.contains("SettingsView") ?? false) {
+                window.isOpaque = false
+                window.backgroundColor = .clear
+                window.titlebarAppearsTransparent = true
+                window.titleVisibility = .hidden
+                window.hasShadow = true
             }
         }
     }
 
-    private func saveAwsCredentialsAction() {
+    private func syncKeysFromKeychain() {
+        apiKey = settings.apiKey()
+        awsAccessKeyId = settings.awsAccessKeyId()
+        awsSecretKey = settings.awsSecretAccessKey()
+        awsSessionToken = settings.awsSessionToken()
+    }
+
+    private func saveKey() {
+        settings.setAPIKey(apiKey)
+        withAnimation(OdinMotion.current.snap) { savedFlash = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            withAnimation(OdinMotion.current.snap) { savedFlash = false }
+        }
+    }
+
+    private func saveAwsCredentials() {
         settings.setAwsAccessKeyId(awsAccessKeyId)
         settings.setAwsSecretAccessKey(awsSecretKey)
         settings.setAwsSessionToken(awsSessionToken)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            savedAwsCredentials = true
-        }
+        withAnimation(OdinMotion.current.snap) { savedAwsCredentials = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                savedAwsCredentials = false
-            }
+            withAnimation(OdinMotion.current.snap) { savedAwsCredentials = false }
         }
     }
 
@@ -605,47 +547,55 @@ struct SettingsView: View {
             binding.wrappedValue = url.path
         }
     }
+
+    private func openScreenRecording() {
+        PermissionManager.requestScreenRecording()
+        PermissionManager.openScreenRecordingSettings()
+    }
+    private func openAccessibility() {
+        PermissionManager.requestAccessibility()
+        PermissionManager.openAccessibilitySettings()
+    }
 }
 
+/// The hotkey recorder, ported to the new design language.
 struct ShortcutRecorderView: View {
     @EnvironmentObject private var settings: AppSettings
-    @State private var isRecording = false
-    @State private var localMonitor: Any? = nil
+    @SwiftUI.State private var isRecording: Bool = false
+    @SwiftUI.State private var localMonitor: Any? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text("Global Hotkey")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(OdinStyle.secondaryInk)
-                .frame(width: 120, alignment: .leading)
-            
-            Button(action: {
-                if isRecording {
-                    stopRecording()
-                } else {
-                    startRecording()
+        HStack(spacing: OdinTokens.Space.s8) {
+            Button {
+                isRecording ? stopRecording() : startRecording()
+            } label: {
+                HStack(spacing: OdinTokens.Space.s6) {
+                    if isRecording {
+                        OdinDot(color: OdinTokens.Color.amber, size: 6)
+                    }
+                    Text(isRecording ? "Press shortcut keys…" : shortcutString)
+                        .font(OdinTokens.Font.mono)
                 }
-            }) {
-                Text(isRecording ? "Press shortcut keys..." : shortcutString)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(minWidth: 160)
+                .padding(.horizontal, OdinTokens.Space.s12)
+                .frame(height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: OdinTokens.R.chip, style: .continuous)
+                        .fill(isRecording ? OdinTokens.Color.amberSoft : OdinTokens.Color.surfaceRaised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: OdinTokens.R.chip, style: .continuous)
+                        .stroke(isRecording ? OdinTokens.Color.amberLine : OdinTokens.Color.hairline,
+                                lineWidth: 0.5)
+                )
             }
-            .buttonStyle(.brandGlass)
-            .controlSize(.regular)
-            
+            .buttonStyle(.plain)
             if isRecording {
                 Text("Press Esc to cancel")
-                    .font(.system(size: 11))
-                    .foregroundStyle(OdinStyle.tertiaryInk)
+                    .font(OdinTokens.Font.caption)
+                    .foregroundStyle(OdinTokens.Color.ink3)
             }
-            
-            Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .onDisappear {
-            stopRecording()
-        }
+        .onDisappear { stopRecording() }
     }
 
     private var shortcutString: String {
@@ -660,16 +610,11 @@ struct ShortcutRecorderView: View {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let keyCode = event.keyCode
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-            if keyCode == 53 { // Esc
+            if keyCode == 53 {
                 stopRecording()
                 return nil
             }
-
-            if modifiers.isEmpty {
-                return nil
-            }
-
+            if modifiers.isEmpty { return nil }
             settings.hotkeyKeyCode = Int(keyCode)
             settings.hotkeyModifiers = Int(modifiers.rawValue)
             stopRecording()

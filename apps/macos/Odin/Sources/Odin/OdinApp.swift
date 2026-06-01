@@ -102,7 +102,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func setupPanel() {
         let rootView = Group {
-            if permissions.allGranted {
+            if CommandLine.arguments.contains("--mark-gallery") {
+                StageMarkGallery()
+            } else if permissions.allGranted {
                 ChatPanel()
             } else {
                 OnboardingView()
