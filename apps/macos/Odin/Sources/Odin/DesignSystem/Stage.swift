@@ -29,7 +29,6 @@ struct StageHeader: View {
     var onExpand: (() -> Void)? = nil
 
     @SwiftUI.State private var expanded: Bool = false
-    @SwiftUI.State private var showErrorPopover: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -147,42 +146,10 @@ struct StageHeader: View {
             }
         case .error(_, let detail):
             if let detail, !detail.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(detail)
-                        .font(OdinTokens.Font.body)
-                        .foregroundStyle(OdinTokens.Color.danger)
-                        .lineLimit(4)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // The full refusal is often a paragraph. After
-                    // 4 lines the Stage starts to crowd the Command
-                    // bar, so the user can pop the rest out into a
-                    // small scrollable sheet.
-                    if detail.count > 200 {
-                        Button {
-                            showErrorPopover = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text("Show full message")
-                                Image(systemName: "arrow.up.right.square")
-                                    .font(.system(size: 9, weight: .semibold))
-                            }
-                        }
-                        .buttonStyle(.odinText)
-                        .popover(isPresented: $showErrorPopover, arrowEdge: .top) {
-                            ScrollView {
-                                Text(detail)
-                                    .font(OdinTokens.Font.body)
-                                    .foregroundStyle(OdinTokens.Color.ink)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(OdinTokens.Space.s16)
-                            }
-                            .frame(width: 420, height: 280)
-                            .background(OdinTokens.Color.surface)
-                        }
-                    }
-                }
+                Text(detail)
+                    .font(OdinTokens.Font.body)
+                    .foregroundStyle(OdinTokens.Color.danger)
+                    .lineLimit(2)
             }
         }
     }

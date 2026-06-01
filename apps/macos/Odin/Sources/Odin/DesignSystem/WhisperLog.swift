@@ -158,12 +158,13 @@ private struct WhisperRow: View {
                     .font(OdinTokens.Font.bodyEm)
                     .foregroundStyle(OdinTokens.Color.ink)
                     .lineLimit(1)
-                if !isExpanded, let detail = entry.detail, !detail.isEmpty {
+                if let detail = entry.detail, !detail.isEmpty {
                     Text(detail)
                         .font(OdinTokens.Font.body)
                         .foregroundStyle(OdinTokens.Color.ink2)
-                        .lineLimit(1)
+                        .lineLimit(isExpanded ? nil : 1)
                         .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 if isExpandable {
@@ -173,20 +174,6 @@ private struct WhisperRow: View {
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .frame(width: 10)
                 }
-            }
-            if isExpanded, let detail = entry.detail, !detail.isEmpty {
-                // Expanded detail below the title row. Capped at 140pt
-                // (~6 lines) with an internal scroll so a long refusal
-                // can't push the panel past the Command bar.
-                ScrollView(.vertical) {
-                    Text(detail)
-                        .font(OdinTokens.Font.body)
-                        .foregroundStyle(OdinTokens.Color.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 0)
-                }
-                .frame(maxHeight: 140)
             }
         }
     }
