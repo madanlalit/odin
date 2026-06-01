@@ -200,6 +200,28 @@ def test_openrouter_analyze_screen_sends_compact_context_text():
     assert '{"coordinate_system"' not in text_block
 
 
+def test_openrouter_analyze_screen_constrains_output_to_json():
+    """OpenRouter request sets response_format=json_object so the model
+    cannot return free-form prose (notably on policy refusals). Without
+    this, the parser flags a refusal as a misleading parse_error."""
+    response = MagicMock()
+    response.json.return_value = {
+        "choices": [{"message": {"content": "{}"}}]
+    }
+    http_client = MagicMock()
+    http_client.post.return_value = response
+    client = OpenRouterLLMClient(api_key="test-key", client=http_client)
+
+    client.analyze_screen(
+        image=Image.new("RGB", (8, 8), color="white"),
+        task="Test task",
+        system_prompt="System prompt",
+    )
+
+    request_json = http_client.post.call_args.kwargs["json"]
+    assert request_json["response_format"] == {"type": "json_object"}
+
+
 def test_bedrock_analyze_screen_uses_converse_image_bytes():
     """Bedrock client sends SDK image bytes and extracts text responses."""
     sdk_client = MagicMock()

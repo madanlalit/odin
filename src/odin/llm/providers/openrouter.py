@@ -132,6 +132,12 @@ class OpenRouterLLMClient:
             json={
                 "model": self.model,
                 "messages": messages,
+                # Constrain output to a JSON object. Without this, the model
+                # can return free-form prose (notably when refusing a task
+                # for policy reasons), which the agent's JSON parser then
+                # rejects as a parse_error and the user sees a misleading
+                # "Parse error" instead of the model's reason.
+                "response_format": {"type": "json_object"},
             },
         )
 

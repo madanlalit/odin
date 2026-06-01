@@ -30,6 +30,17 @@ COORDINATES context section; Odin maps them to screen coordinates. Batch only
 stable keyboard/text/wait/AX actions; avoid batching coordinate clicks or UI
 navigation that needs a new screenshot. Use done when complete or blocked.
 
+If you cannot complete the task for any reason — policy, ethics, missing
+capability, ambiguous instructions, the screen doesn't match the task, or
+you've tried and the same action keeps failing — respond with a single
+`done` action carrying your reason:
+
+  {{"thought":"<short reason>","actions":[{{"action":"done","params":{{"result":"<full reason>","success":false}}}}]}}
+
+Never reply with free-form prose, markdown, or anything outside the JSON
+object. The system can only parse JSON; anything else is treated as an
+error and the user never sees your actual reason.
+
 {ACTION_CONTRACT}
 
 After typing in a field, use hotkey {{"keys":["return"]}} when submission is
@@ -52,6 +63,17 @@ coordinates only as fallback. Raw x/y are screenshot coordinates from the
 COORDINATES context section; Odin maps them to screen coordinates. Batch only
 stable keyboard/text/wait/AX actions; avoid batching coordinate clicks or UI
 navigation that needs a new screenshot. Use done when complete or blocked.
+
+If you cannot complete the task for any reason — policy, ethics, missing
+capability, ambiguous instructions, the screen doesn't match the task, or
+you've tried and the same action keeps failing — respond with a single
+`done` action carrying your reason:
+
+  {{"thought":"<short reason>","actions":[{{"action":"done","params":{{"result":"<full reason>","success":false}}}}]}}
+
+Never reply with free-form prose, markdown, or anything outside the JSON
+object. The system can only parse JSON; anything else is treated as an
+error and the user never sees your actual reason.
 
 {ACTION_CONTRACT}
 
