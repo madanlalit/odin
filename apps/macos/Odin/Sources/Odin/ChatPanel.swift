@@ -35,6 +35,7 @@ struct ChatPanel: View {
         }
         .background(
             Button(action: {
+                if runner.isRunning || runner.pendingApproval != nil { return }
                 if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "OdinMainWindow" }) {
                     window.orderOut(nil)
                 }

@@ -68,9 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             queue: .main
         ) { [weak self] notification in
             MainActor.assumeIsolated {
-                if let window = notification.object as? NSWindow, window == self?.panel {
-                    window.orderOut(nil)
-                }
+                guard let self else { return }
+                guard let window = notification.object as? NSWindow, window == self.panel else { return }
+                if self.runner.isRunning || self.runner.pendingApproval != nil { return }
+                window.orderOut(nil)
             }
         }
 
@@ -147,6 +148,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func toggleMainWindow() {
         guard let panel = panel else { return }
+        if runner.isRunning || runner.pendingApproval != nil {
+            showMainWindow()
+            return
+        }
         if panel.isVisible && NSApp.isActive {
             panel.orderOut(nil)
         } else {
