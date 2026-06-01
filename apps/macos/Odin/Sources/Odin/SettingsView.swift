@@ -286,8 +286,8 @@ struct SettingsView: View {
 
     private var defaultModelHint: String {
         switch settings.provider {
-        case .openrouter: return "google/gemini-2.0-flash-001"
-        case .bedrock: return "us.anthropic.claude-opus-4-7"
+        case .openrouter: return "minimax/minimax-m3"
+        case .bedrock: return ""
         }
     }
 

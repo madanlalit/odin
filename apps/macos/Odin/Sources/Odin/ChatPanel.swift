@@ -322,10 +322,7 @@ struct ChatPanel: View {
 
     private var shortModelLabel: String {
         let model = settings.modelLabel
-        if model.contains("opus") { return "opus-4-7" }
-        if model.contains("sonnet") { return "sonnet-4-6" }
-        if model.contains("haiku") { return "haiku-4-5" }
-        if model.contains("gemini") { return "gemini-2.0" }
+        if model.isEmpty { return "—" }
         if model.count <= 14 { return model }
         return String(model.prefix(14))
     }

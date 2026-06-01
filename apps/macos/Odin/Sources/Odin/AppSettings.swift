@@ -19,9 +19,8 @@ enum Provider: String, CaseIterable, Identifiable {
 
 final class AppSettings: ObservableObject {
     private enum Defaults {
-        static let openRouterModel = "google/gemini-2.0-flash-001"
-        static let bedrockModel = "us.anthropic.claude-opus-4-7"
-        static let legacyBedrockModel = "amazon.nova-lite-v1:0"
+        static let openRouterModel = "minimax/minimax-m3"
+        static let bedrockModel = ""
     }
 
     @Published var provider: Provider {
@@ -67,16 +66,7 @@ final class AppSettings: ObservableObject {
     private var cachedAPIKeys: [Provider: String] = [:]
 
     static let modelAliases: [String: String] = [
-        "google/gemini-2.0-flash-001": "Gemini 2.0 Flash",
-        "anthropic/claude-opus-4.7": "Claude 4.7 Opus",
-        "anthropic/claude-sonnet-4.6": "Claude 4.6 Sonnet",
-        "us.anthropic.claude-opus-4-7": "Claude 4.7 Opus",
-        "us.anthropic.claude-sonnet-4-6": "Claude 4.6 Sonnet",
-        "us.anthropic.claude-haiku-4-5": "Claude 4.5 Haiku",
-        "deepseek/deepseek-v4-pro": "DeepSeek v4 Pro",
-        "google/gemini-2.0-flash": "Gemini 2.0 Flash",
-        "anthropic/claude-3-5-sonnet": "Claude 3.5 Sonnet",
-        "anthropic/claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet"
+        "minimax/minimax-m3": "MiniMax M3"
     ]
 
     var modelLabel: String {
@@ -121,13 +111,7 @@ final class AppSettings: ObservableObject {
         let providerValue = defaults.string(forKey: "provider") ?? Provider.openrouter.rawValue
         let resolvedProvider = Provider(rawValue: providerValue) ?? .openrouter
         provider = resolvedProvider
-        let savedModel = defaults.string(forKey: "model") ?? ""
-        if resolvedProvider == .bedrock && savedModel == Defaults.legacyBedrockModel {
-            model = ""
-            defaults.set("", forKey: "model")
-        } else {
-            model = savedModel
-        }
+        model = defaults.string(forKey: "model") ?? ""
         awsRegion = defaults.string(forKey: "awsRegion") ?? "us-east-1"
         repoPath = defaults.string(forKey: "repoPath") ?? defaultRepoPath
         pythonPath = defaults.string(forKey: "pythonPath") ?? Self.defaultPythonPath(repoPath: defaultRepoPath)
@@ -291,16 +275,10 @@ final class AppSettings: ObservableObject {
         switch provider {
         case .openrouter:
             return [
-                ModelSuggestion(modelID: "google/gemini-2.0-flash-001", alias: "Gemini 2.0 Flash"),
-                ModelSuggestion(modelID: "anthropic/claude-opus-4.7", alias: "Claude 4.7 Opus"),
-                ModelSuggestion(modelID: "anthropic/claude-sonnet-4.6", alias: "Claude 4.6 Sonnet")
+                ModelSuggestion(modelID: "minimax/minimax-m3", alias: "MiniMax M3")
             ]
         case .bedrock:
-            return [
-                ModelSuggestion(modelID: "us.anthropic.claude-opus-4-7", alias: "Claude 4.7 Opus"),
-                ModelSuggestion(modelID: "us.anthropic.claude-sonnet-4-6", alias: "Claude 4.6 Sonnet"),
-                ModelSuggestion(modelID: "us.anthropic.claude-haiku-4-5", alias: "Claude 4.5 Haiku")
-            ]
+            return []
         }
     }
 
