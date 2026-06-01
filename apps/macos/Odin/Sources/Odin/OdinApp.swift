@@ -1,3 +1,4 @@
+import Combine
 import ServiceManagement
 import SwiftUI
 import AppKit
@@ -42,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let permissions = PermissionManager()
 
     var panel: NSPanel?
+    private var panelStateCancellables = Set<AnyCancellable>()
+
+    private var panelShouldPersist: Bool {
+        runner.pendingApproval != nil || (runner.isRunning && settings.requireActionApproval)
+    }
 
     override init() {
         super.init()
@@ -70,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 guard let window = notification.object as? NSWindow, window == self.panel else { return }
-                if self.runner.isRunning || self.runner.pendingApproval != nil { return }
+                if self.panelShouldPersist { return }
                 window.orderOut(nil)
             }
         }
@@ -84,6 +90,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         setupPanel()
+
+        runner.$isRunning
+            .combineLatest(runner.$pendingApproval, settings.$requireActionApproval)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _, _ in
+                self?.refreshPanelLevel()
+            }
+            .store(in: &panelStateCancellables)
     }
 
     private func setupPanel() {
@@ -148,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func toggleMainWindow() {
         guard let panel = panel else { return }
-        if runner.isRunning || runner.pendingApproval != nil {
+        if panelShouldPersist {
             showMainWindow()
             return
         }
@@ -156,6 +170,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             panel.orderOut(nil)
         } else {
             showMainWindow()
+        }
+    }
+
+    private func refreshPanelLevel() {
+        guard let panel else { return }
+        let target: NSWindow.Level = panelShouldPersist ? .popUpMenu : .statusBar
+        if panel.level != target {
+            panel.level = target
         }
     }
 }

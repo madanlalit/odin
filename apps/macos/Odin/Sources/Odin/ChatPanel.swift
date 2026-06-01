@@ -9,6 +9,10 @@ struct ChatPanel: View {
     @State private var showTrace = false
     @FocusState private var inputFocused: Bool
 
+    private var panelShouldPersist: Bool {
+        runner.pendingApproval != nil || (runner.isRunning && settings.requireActionApproval)
+    }
+
     var body: some View {
         openPill
             .frame(width: 540, alignment: .top)
@@ -35,7 +39,7 @@ struct ChatPanel: View {
         }
         .background(
             Button(action: {
-                if runner.isRunning || runner.pendingApproval != nil { return }
+                if panelShouldPersist { return }
                 if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "OdinMainWindow" }) {
                     window.orderOut(nil)
                 }
