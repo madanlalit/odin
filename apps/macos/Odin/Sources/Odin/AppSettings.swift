@@ -18,11 +18,6 @@ enum Provider: String, CaseIterable, Identifiable {
 }
 
 final class AppSettings: ObservableObject {
-    private enum Defaults {
-        static let openRouterModel = "minimax/minimax-m3"
-        static let bedrockModel = ""
-    }
-
     @Published var provider: Provider {
         didSet { save() }
     }
@@ -65,9 +60,36 @@ final class AppSettings: ObservableObject {
     private let defaults = UserDefaults.standard
     private var cachedAPIKeys: [Provider: String] = [:]
 
-    static let modelAliases: [String: String] = [
-        "minimax/minimax-m3": "MiniMax M3"
-    ]
+    struct ModelSuggestion: Identifiable {
+        var id: String { modelID }
+        let modelID: String
+        let alias: String
+    }
+
+    private enum Catalog {
+        static let openRouterModels: [ModelSuggestion] = [
+            ModelSuggestion(modelID: "minimax/minimax-m3", alias: "MiniMax M3"),
+            ModelSuggestion(modelID: "anthropic/claude-opus-4.8", alias: "Claude Opus 4.8"),
+            ModelSuggestion(modelID: "tencent/hy3-preview", alias: "Tencent HY3 Preview"),
+            ModelSuggestion(modelID: "deepseek/deepseek-v4-flash", alias: "DeepSeek V4 Flash"),
+            ModelSuggestion(modelID: "deepseek/deepseek-v4-pro", alias: "DeepSeek V4 Pro"),
+            ModelSuggestion(modelID: "google/gemini-3.5-flash", alias: "Gemini 3.5 Flash"),
+            ModelSuggestion(modelID: "moonshotai/kimi-k2.6", alias: "Kimi K2.6"),
+            ModelSuggestion(modelID: "openai/gpt-5.5", alias: "GPT-5.5"),
+        ]
+        static let bedrockModels: [ModelSuggestion] = [
+            ModelSuggestion(modelID: "anthropic.claude-opus-4-8", alias: "Claude Opus 4.8"),
+            ModelSuggestion(modelID: "anthropic.claude-sonnet-4-6", alias: "Claude Sonnet 4.6"),
+            ModelSuggestion(modelID: "anthropic.claude-haiku-4-5-20251001-v1:0", alias: "Claude Haiku 4.5"),
+        ]
+
+        static var openRouterDefaultID: String {
+            openRouterModels.first?.modelID ?? ""
+        }
+        static var bedrockDefaultID: String {
+            bedrockModels.first?.modelID ?? ""
+        }
+    }
 
     var modelLabel: String {
         modelAlias
@@ -77,13 +99,21 @@ final class AppSettings: ObservableObject {
         alias(for: effectiveModel)
     }
 
+    var defaultModelID: String {
+        switch provider {
+        case .openrouter: return Catalog.openRouterDefaultID
+        case .bedrock: return Catalog.bedrockDefaultID
+        }
+    }
+
     func alias(for modelID: String) -> String {
         let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return ""
         }
-        if let mapped = Self.modelAliases[trimmed] {
-            return mapped
+        let allModels = Catalog.openRouterModels + Catalog.bedrockModels
+        if let match = allModels.first(where: { $0.modelID == trimmed }) {
+            return match.alias
         }
         let lastComponent = trimmed.split(separator: "/").last ?? ""
         let cleaned = lastComponent
@@ -98,12 +128,7 @@ final class AppSettings: ObservableObject {
         if !trimmed.isEmpty {
             return trimmed
         }
-        switch provider {
-        case .openrouter:
-            return Defaults.openRouterModel
-        case .bedrock:
-            return Defaults.bedrockModel
-        }
+        return defaultModelID
     }
 
     init() {
@@ -265,20 +290,10 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    struct ModelSuggestion: Identifiable {
-        var id: String { modelID }
-        let modelID: String
-        let alias: String
-    }
-
     var suggestedModels: [ModelSuggestion] {
         switch provider {
-        case .openrouter:
-            return [
-                ModelSuggestion(modelID: "minimax/minimax-m3", alias: "MiniMax M3")
-            ]
-        case .bedrock:
-            return []
+        case .openrouter: return Catalog.openRouterModels
+        case .bedrock: return Catalog.bedrockModels
         }
     }
 

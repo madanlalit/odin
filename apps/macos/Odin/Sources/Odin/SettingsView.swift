@@ -332,10 +332,7 @@ struct SettingsView: View {
     }
 
     private var defaultModelHint: String {
-        switch settings.provider {
-        case .openrouter: return "minimax/minimax-m3"
-        case .bedrock: return ""
-        }
+        settings.defaultModelID
     }
 
     private var abbreviatedRepoPath: String {
