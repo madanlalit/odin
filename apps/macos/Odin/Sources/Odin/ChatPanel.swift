@@ -45,13 +45,15 @@ struct ChatPanel: View {
                 Hairline()
                 CommandBar(
                     text: $task,
-                    modelLabel: shortModelLabel,
+                    suggestedModels: settings.suggestedModels,
+                    selectedModelID: settings.effectiveModel,
                     costLabel: costLabel,
                     isRunning: runner.isRunning,
                     canSubmit: !task.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                     onSubmit: submitTask,
                     onStop: { runner.stop() },
-                    onPickModel: { pickerVisible.toggle() }
+                    isModelPickerPresented: $pickerVisible,
+                    onSelectModel: { id in settings.model = id }
                 )
                 if !pinnedAndRecents.isEmpty && !runner.isRunning && runner.pendingApproval == nil {
                     Hairline()
@@ -177,13 +179,6 @@ struct ChatPanel: View {
         let pinned = settings.pinnedTasks
         let recents = settings.recentTasks.filter { !pinned.contains($0) }
         return pinned + recents
-    }
-
-    private var shortModelLabel: String {
-        let model = settings.modelLabel
-        if model.isEmpty { return "—" }
-        if model.count <= 14 { return model }
-        return String(model.prefix(14))
     }
 
     private var costLabel: String? {

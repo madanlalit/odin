@@ -5,13 +5,15 @@ import SwiftUI
 /// in focus and shows a keyboard hint when the input is empty.
 struct CommandBar: View {
     @Binding var text: String
-    var modelLabel: String
+    var suggestedModels: [AppSettings.ModelSuggestion]
+    var selectedModelID: String
     var costLabel: String?
     var isRunning: Bool
     var canSubmit: Bool
     var onSubmit: () -> Void
     var onStop: () -> Void
-    var onPickModel: () -> Void
+    @Binding var isModelPickerPresented: Bool
+    var onSelectModel: (String) -> Void
 
     @FocusState private var focused: Bool
     @SwiftUI.State private var cursorVisible: Bool = true
@@ -73,8 +75,32 @@ struct CommandBar: View {
             : "What should Odin do?"
     }
 
+    private var modelChipLabel: String {
+        if let match = suggestedModels.first(where: { $0.modelID == selectedModelID }) {
+            return match.alias
+        }
+        let trimmed = selectedModelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return "Choose model"
+    }
+
+    @ViewBuilder
     private var modelChip: some View {
-        ModelChip(label: modelLabel, action: onPickModel)
+        if suggestedModels.isEmpty {
+            ModelChip(label: modelChipLabel, showsChevron: false)
+        } else {
+            ModelChip(label: modelChipLabel, action: { isModelPickerPresented.toggle() })
+                .popover(isPresented: $isModelPickerPresented, arrowEdge: .bottom) {
+                    ModelPickerPopover(
+                        models: suggestedModels,
+                        selectedID: selectedModelID,
+                        onSelect: { id in
+                            onSelectModel(id)
+                            isModelPickerPresented = false
+                        }
+                    )
+                }
+        }
     }
 
     @ViewBuilder
@@ -97,6 +123,72 @@ struct CommandBar: View {
             .disabled(!canSubmit)
             .help(canSubmit ? "Run (return)" : "Type a task to run")
         }
+    }
+}
+
+/// The dropdown content for the model chip. One row per suggested model,
+/// the selected one marked with an amber check, all rendered in the
+/// shared Odin surface so the popover feels like part of the panel.
+private struct ModelPickerPopover: View {
+    let models: [AppSettings.ModelSuggestion]
+    let selectedID: String
+    let onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ForEach(models) { model in
+                ModelPickerRow(
+                    model: model,
+                    isSelected: model.modelID == selectedID,
+                    onTap: { onSelect(model.modelID) }
+                )
+            }
+        }
+        .padding(.vertical, OdinTokens.Space.s6)
+        .frame(width: 280)
+        .background(OdinTokens.Color.surface)
+    }
+}
+
+private struct ModelPickerRow: View {
+    let model: AppSettings.ModelSuggestion
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    @SwiftUI.State private var hovering: Bool = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: OdinTokens.Space.s10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.alias)
+                        .font(OdinTokens.Font.bodyEm)
+                        .foregroundStyle(isSelected ? OdinTokens.Color.ink : OdinTokens.Color.ink2)
+                    Text(model.modelID)
+                        .font(OdinTokens.Font.mono)
+                        .foregroundStyle(OdinTokens.Color.ink3)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(OdinTokens.Color.amber)
+                }
+            }
+            .padding(.horizontal, OdinTokens.Space.s12)
+            .frame(height: 44)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(hovering ? OdinTokens.Color.surfaceHover : .clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(OdinMotion.current.snap, value: hovering)
     }
 }
 

@@ -92,13 +92,18 @@ private struct PanelMockup: View {
             Hairline()
             CommandBar(
                 text: .constant(""),
-                modelLabel: "MiniMax M3",
+                suggestedModels: [
+                    AppSettings.ModelSuggestion(modelID: "minimax/minimax-m3", alias: "MiniMax M3"),
+                    AppSettings.ModelSuggestion(modelID: "anthropic/claude-opus-4.8", alias: "Claude Opus 4.8"),
+                ],
+                selectedModelID: "minimax/minimax-m3",
                 costLabel: state == .working ? "$0.043" : nil,
                 isRunning: state != .idle,
                 canSubmit: false,
                 onSubmit: {},
                 onStop: {},
-                onPickModel: {}
+                isModelPickerPresented: .constant(false),
+                onSelectModel: { _ in }
             )
             Hairline()
             LibraryStrip(
