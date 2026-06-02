@@ -8,7 +8,7 @@ from typing import Any
 
 from PIL import Image
 
-from odin.llm.base import DEFAULT_OPENROUTER_MODEL, LLMResponse
+from odin.llm.base import LLMResponse
 from odin.llm.context import format_screen_context
 
 
@@ -25,7 +25,7 @@ class OpenRouterLLMClient:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_OPENROUTER_MODEL,
+        model: str = "",
         client: Any | None = None,
     ):
         """

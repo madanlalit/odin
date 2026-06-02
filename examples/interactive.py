@@ -23,6 +23,7 @@ def main():
     load_dotenv()
 
     provider = os.environ.get("ODIN_LLM_PROVIDER", "openrouter")
+    model = os.environ.get("ODIN_LLM_MODEL")
 
     if provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
         print("ERROR: Set OPENROUTER_API_KEY environment variable")
@@ -32,7 +33,7 @@ def main():
     print("Type a task and press Enter. Type 'quit' to exit.\n")
 
     try:
-        llm = create_client(provider=provider)
+        llm = create_client(provider=provider, model=model)
     except (ImportError, ValueError) as e:
         print(f"ERROR: {e}")
         sys.exit(1)

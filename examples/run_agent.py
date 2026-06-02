@@ -26,6 +26,7 @@ def main():
     load_dotenv()
 
     provider = os.environ.get("ODIN_LLM_PROVIDER", "openrouter")
+    model = os.environ.get("ODIN_LLM_MODEL")
     if provider == "openrouter" and not os.environ.get("OPENROUTER_API_KEY"):
         print("ERROR: OPENROUTER_API_KEY environment variable not set.")
         return
@@ -36,7 +37,7 @@ def main():
 
     try:
         # Create client (defaults to OpenRouter, using environment variables)
-        llm = create_client(provider=provider)
+        llm = create_client(provider=provider, model=model)
     except (ImportError, ValueError) as e:
         print(f"Initialization failed: {e}")
         return

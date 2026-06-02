@@ -5,9 +5,6 @@ from typing import Any, Protocol
 from PIL import Image
 from pydantic import BaseModel
 
-DEFAULT_OPENROUTER_MODEL = "google/gemini-2.0-flash-001"
-DEFAULT_BEDROCK_MODEL = "us.anthropic.claude-opus-4-7"
-
 
 class LLMResponse(BaseModel):
     """Response from the LLM."""

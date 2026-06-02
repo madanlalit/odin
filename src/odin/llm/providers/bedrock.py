@@ -7,7 +7,7 @@ from typing import Any
 
 from PIL import Image
 
-from odin.llm.base import DEFAULT_BEDROCK_MODEL, LLMResponse
+from odin.llm.base import LLMResponse
 from odin.llm.context import format_screen_context
 
 DEFAULT_TOKEN_RATES_PER_1K: dict[str, tuple[float, float]] = {
@@ -25,7 +25,7 @@ class BedrockLLMClient:
 
     def __init__(
         self,
-        model: str = DEFAULT_BEDROCK_MODEL,
+        model: str = "",
         region_name: str | None = None,
         profile_name: str | None = None,
         inference_config: dict[str, Any] | None = None,

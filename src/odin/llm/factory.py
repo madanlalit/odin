@@ -3,11 +3,7 @@
 import os
 from typing import Any
 
-from odin.llm.base import (
-    DEFAULT_BEDROCK_MODEL,
-    DEFAULT_OPENROUTER_MODEL,
-    LLMProvider,
-)
+from odin.llm.base import LLMProvider
 
 
 def create_client(
@@ -23,7 +19,7 @@ def create_client(
 
     Args:
         api_key: OpenRouter API key (or set OPENROUTER_API_KEY env var).
-        model: Provider-specific model to use for inference.
+        model: Provider-specific model to use for inference. Required.
         provider: LLM provider ("openrouter" or "bedrock"). Defaults to
                   ODIN_LLM_PROVIDER or infers the provider from model prefixes.
         region_name: AWS region for Bedrock. Uses the AWS SDK default chain if omitted.
@@ -33,6 +29,9 @@ def create_client(
     Returns:
         Configured LLM provider instance.
     """
+    if not model or not model.strip():
+        raise ValueError("A model identifier is required.")
+
     provider_name = _resolve_provider(provider, model)
 
     if provider_name == "openrouter":
@@ -40,14 +39,14 @@ def create_client(
 
         return OpenRouterLLMClient(
             api_key=api_key,
-            model=_strip_model_prefix(model or DEFAULT_OPENROUTER_MODEL, "openrouter"),
+            model=_strip_model_prefix(model, "openrouter"),
         )
 
     if provider_name == "bedrock":
         from odin.llm.providers.bedrock import BedrockLLMClient
 
         return BedrockLLMClient(
-            model=_strip_model_prefix(model or DEFAULT_BEDROCK_MODEL, "bedrock"),
+            model=_strip_model_prefix(model, "bedrock"),
             region_name=region_name,
             profile_name=profile_name,
             inference_config=inference_config,

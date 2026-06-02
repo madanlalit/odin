@@ -342,9 +342,7 @@ final class AgentRunner: ObservableObject {
         ]
 
         let model = settings.effectiveModel
-        if !model.isEmpty {
-            args.append(contentsOf: ["--model", model])
-        }
+        args.append(contentsOf: ["--model", model])
 
         if settings.traceScreenshots {
             args.append("--trace-screenshots")

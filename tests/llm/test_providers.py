@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from PIL import Image
 
-from odin.llm.base import DEFAULT_BEDROCK_MODEL, DEFAULT_OPENROUTER_MODEL
 from odin.llm.factory import create_client
 from odin.llm.providers.bedrock import BedrockLLMClient
 from odin.llm.providers.openrouter import OpenRouterLLMClient
@@ -44,18 +43,10 @@ def _sample_screen_context() -> dict:
     }
 
 
-def test_create_client_defaults_to_openrouter():
-    """Default factory path remains OpenRouter."""
-    httpx_module = MagicMock()
-    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True), patch.object(
-        OpenRouterLLMClient, "_load_httpx", return_value=httpx_module
-    ):
-        client = create_client()
-
-    assert isinstance(client, OpenRouterLLMClient)
-    assert client.model == DEFAULT_OPENROUTER_MODEL
-    httpx_module.Client.assert_called_once_with(timeout=120.0)
-    client.close()
+def test_create_client_requires_model():
+    """create_client raises when no model identifier is provided."""
+    with pytest.raises(ValueError, match="model identifier is required"):
+        create_client()
 
 
 def test_create_client_infers_bedrock_from_model_prefix():
@@ -71,13 +62,13 @@ def test_create_client_infers_bedrock_from_model_prefix():
     )
 
 
-def test_create_client_defaults_to_bedrock_opus():
-    """Explicit Bedrock provider defaults to the Opus model used by the app."""
+def test_create_client_passes_explicit_bedrock_model():
+    """Explicit Bedrock provider passes the given model through."""
     with patch("odin.llm.providers.bedrock.BedrockLLMClient") as mock_client:
-        create_client(provider="bedrock")
+        create_client(provider="bedrock", model="us.anthropic.claude-opus-4-7")
 
     mock_client.assert_called_once_with(
-        model=DEFAULT_BEDROCK_MODEL,
+        model="us.anthropic.claude-opus-4-7",
         region_name=None,
         profile_name=None,
         inference_config=None,
