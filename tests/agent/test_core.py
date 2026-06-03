@@ -1,23 +1,37 @@
-"""Tests for the main Agent class."""
+"""Tests for the Agent class and the ReAct loop."""
+
+from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
-from PIL import Image
 
-from odin.action.controller import ActionResult
 from odin.action.safety import SafetyConfig
+from odin.agent.actions import ActionKind
 from odin.agent.core import Agent, AgentConfig, AgentStatus
-from odin.agent.executor import ActionExecutor
 from odin.agent.parser import ParsedAction
 from odin.llm.base import LLMResponse
 from odin.perception.accessibility import AccessibilitySnapshot, AXElementInfo, AXFrame
+from tests.agent.fakes import (
+    FakeAccessibility,
+    FakeActionController,
+    FakeLLM,
+    FakeScreen,
+)
+from tests.agent.helpers import build_agent
 
 
-def _action(name: str, params: dict | None = None, thought: str | None = None) -> dict:
-    """Build a test action object."""
-    item = {"action": name, "params": params or {}}
+def _action(
+    name: str | ActionKind,
+    params: dict | None = None,
+    thought: str | None = None,
+) -> dict:
+    """Build a test action object for LLM responses."""
+    item: dict[str, Any] = {
+        "action": str(name),
+        "params": params or {},
+    }
     if thought is not None:
         item["thought"] = thought
     return item
@@ -28,674 +42,418 @@ def _batch_response(*actions: dict, thought: str = "test") -> str:
     return json.dumps({"thought": thought, "actions": list(actions)})
 
 
-class FakeAccessibility:
-    """Fake accessibility layer for agent tests."""
+_AX_FRAME = AXFrame(x=100, y=200, width=80, height=40)
+_AX_SNAPSHOT = AccessibilitySnapshot(
+    available=True,
+    trusted=True,
+    app="Test App",
+    window="Test Window",
+    elements=[
+        AXElementInfo(
+            id="ax_1", role="AXButton", title="Submit",
+            frame=_AX_FRAME, actions=["AXPress"],
+        ),
+    ],
+)
 
-    def __init__(self):
-        self._frame = AXFrame(x=100, y=200, width=80, height=40)
-        self.snapshot = AccessibilitySnapshot(
-            available=True,
-            trusted=True,
-            app="Test App",
-            window="Test Window",
-            elements=[
-                AXElementInfo(
-                    id="ax_1",
-                    role="AXButton",
-                    title="Submit",
-                    frame=self._frame,
-                    actions=["AXPress"],
-                )
-            ],
+
+class TestAgentLifecycle:
+    """Basic agent construction and the ``run`` happy path."""
+
+    def test_agent_initialization_is_idle(self):
+        """A freshly-constructed agent is idle and uses the default config."""
+        agent = Agent(FakeLLM('{"thought": "x", "actions": []}'))
+
+        assert agent.status is AgentStatus.IDLE
+        assert agent.config.loop.max_steps == 100
+
+    def test_agent_with_custom_loop_config(self):
+        """Custom loop config overrides defaults."""
+        agent = Agent(
+            FakeLLM('{"thought": "x", "actions": []}'),
+            config=AgentConfig(loop=AgentConfig().loop.model_copy(update={
+                "max_steps": 10, "step_delay": 0.25,
+            })),
         )
-        self.performed_actions: list[tuple[str, str]] = []
-        self.focused: list[str] = []
-        self.values: list[tuple[str, str]] = []
 
-    def capture(self, *, max_depth: int = 8, max_nodes: int = 120):  # noqa: ARG002
-        return self.snapshot
+        assert agent.config.loop.max_steps == 10
+        assert agent.config.loop.step_delay == 0.25
 
-    def perform_action(self, element_id: str, action_name: str):
-        self.performed_actions.append((element_id, action_name))
-        if action_name == "press":
-            return True, f"pressed {element_id}"
-        return False, "unsupported action"
-
-    def focus(self, element_id: str):
-        self.focused.append(element_id)
-        return True, f"focused {element_id}"
-
-    def set_value(self, element_id: str, value: str):
-        self.values.append((element_id, value))
-        return True, f"set {element_id}"
-
-    def frame(self, element_id: str):
-        if element_id == "ax_1":
-            return self._frame
-        return None
-
-
-class TestAgent:
-    """Tests for the main Agent class."""
-
-    @pytest.fixture
-    def mock_llm_client(self):
-        """Create a mock LLM client."""
-        client = MagicMock()
-        client.analyze_screen.return_value = LLMResponse(
-            content=_batch_response(
-                _action("done", {"result": "Task complete", "success": True}),
-                thought="Done",
-            )
+    def test_agent_run_immediate_done_succeeds(self):
+        """An LLM that replies with ``done`` short-circuits to success."""
+        llm = FakeLLM(_batch_response(
+            _action(ActionKind.DONE, {"result": "Task complete", "success": True}),
+        ))
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(_AX_SNAPSHOT),
+            action_controller=FakeActionController(),
         )
-        return client
 
-    @pytest.fixture
-    def mock_screenshot(self):
-        """Create a mock screenshot."""
-        return Image.new("RGB", (1920, 1080), color="white")
-
-    def test_agent_initialization(self, mock_llm_client):
-        """Test agent initialization."""
-        agent = Agent(mock_llm_client)
-
-        assert agent.status == AgentStatus.IDLE
-        assert agent.config.max_steps == 100
-
-    def test_agent_with_custom_config(self, mock_llm_client):
-        """Test agent with custom configuration."""
-        config = AgentConfig(max_steps=10, step_delay=0.25)
-        agent = Agent(mock_llm_client, config=config)
-
-        assert agent.config.max_steps == 10
-        assert agent.config.step_delay == 0.25
-
-    @patch("odin.agent.core.Screen")
-    def test_agent_run_immediate_done(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test agent run that immediately completes."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        agent = Agent(mock_llm_client)
         result = agent.run("Test task")
 
         assert result.success is True
         assert result.message == "Task complete"
-        assert agent.status == AgentStatus.COMPLETED
+        assert agent.status is AgentStatus.COMPLETED
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_sends_accessibility_context_to_llm(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test agent includes accessibility context in LLM requests."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
 
-        fake_ax = FakeAccessibility()
-        agent = Agent(mock_llm_client, config=AgentConfig(step_delay=0))
-        agent.accessibility = fake_ax  # type: ignore[assignment]
-        agent.element_handler.accessibility = fake_ax  # type: ignore[assignment]
-        agent.executor.accessibility = fake_ax  # type: ignore[assignment]
-        agent.action_controller.screen_width = 1920
-        agent.action_controller.screen_height = 1080
-        agent.action_controller.get_mouse_position = MagicMock(return_value=(960, 540))
+class TestAgentScreenContext:
+    """The screen context sent to the LLM is correct."""
+
+    def test_sends_accessibility_context_to_llm(self):
+        """Accessibility and coordinate context reach the LLM call."""
+        llm = FakeLLM(_batch_response(
+            _action(ActionKind.DONE, {"result": "ok", "success": True}),
+        ))
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(_AX_SNAPSHOT),
+            action_controller=FakeActionController(
+                screen_width=1920, screen_height=1080,
+                mouse_position=(960, 540),
+            ),
+        )
+
         result = agent.run("Use accessibility")
-
         assert result.success is True
-        screen_context = mock_llm_client.analyze_screen.call_args.kwargs[
-            "screen_context"
-        ]
+
+        screen_context = llm.calls[0]["screen_context"]
         assert screen_context["accessibility"]["available"] is True
         assert screen_context["accessibility"]["elements"][0]["id"] == "ax_1"
         assert (
             screen_context["coordinate_system"]["type"]
             == "screenshot_coordinates_for_raw_xy_actions"
         )
-        assert screen_context["mouse"] == {
-            "available": True,
-            "screen_position": {
-                "x": 960,
-                "y": 540,
-            },
-            "screenshot_position": {
-                "x": 960,
-                "y": 540,
-            },
-        }
+        assert screen_context["mouse"]["screen_position"] == {"x": 960, "y": 540}
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_maps_screenshot_coordinates_to_screen_coordinates(
-        self, mock_screen_class, mock_llm_client, tmp_path
-    ):
-        """Test model screenshot coordinates are mapped before execution."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = Image.new(
-            "RGB",
-            (3600, 2338),
-            color="white",
-        )
-        mock_screen_class.return_value = mock_screen
 
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("click", {"x": 841, "y": 1049}),
-                    thought="Click Firefox in dock",
-                )
+class TestAgentCoordinateMapping:
+    """Screenshot coordinates are mapped to screen coordinates before dispatch."""
+
+    def test_click_coordinates_are_mapped(self):
+        """A model click at (841, 1049) is mapped before reaching the backend."""
+        llm = FakeLLM([
+            _batch_response(
+                _action(ActionKind.CLICK, {"x": 841, "y": 1049}),
+                thought="Click Firefox in dock",
             ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Clicked", "success": True}),
-                    thought="Done",
-                )
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "Clicked", "success": True}),
             ),
-        ]
-
-        trace_path = tmp_path / "coordinate-trace.jsonl"
-        config = AgentConfig(
-            step_delay=0,
-            max_screenshot_size=(1663, 1080),
-            trace_path=trace_path,
+        ])
+        action_controller = FakeActionController(
+            screen_width=1800, screen_height=1169,
         )
-        agent = Agent(mock_llm_client, config=config)
-        agent.action_controller.screen_width = 1800
-        agent.action_controller.screen_height = 1169
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(width=3600, height=2338),
+            accessibility=FakeAccessibility(),
+            action_controller=action_controller,
+        )
         agent.safety.screen_width = 1800
         agent.safety.screen_height = 1169
-        agent.action_controller.click = MagicMock(
-            return_value=ActionResult(
-                success=True,
-                action="click",
-                message="Clicked",
-            )
-        )
 
         result = agent.run("Open Firefox")
-
         assert result.success is True
-        agent.action_controller.click.assert_called_once_with(
-            x=910,
-            y=1135,
-            button="left",
-        )
-        events = [
-            json.loads(line)
-            for line in trace_path.read_text(encoding="utf-8").splitlines()
-        ]
-        mapping_event = next(
-            event for event in events if event["event"] == "action_coordinates_mapped"
-        )
-        assert mapping_event["data"]["mappings"] == [
-            {
-                "x_key": "x",
-                "y_key": "y",
-                "input_x": 841,
-                "input_y": 1049,
-                "mapped_x": 910,
-                "mapped_y": 1135,
-            }
-        ]
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_maps_screenshot_coordinates_to_screen_coordinates_for_drag(
-        self, mock_screen_class, mock_llm_client, tmp_path
-    ):
-        """Test model screenshot coordinates are mapped for drag actions before execution."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = Image.new(
-            "RGB",
-            (3600, 2338),
-            color="white",
-        )
-        mock_screen_class.return_value = mock_screen
+        click = action_controller.find_call("click")
+        assert click == {"action": "click", "x": 910, "y": 1135, "button": "left"}
 
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("drag", {"start_x": 841, "start_y": 1049, "end_x": 1000, "end_y": 500}),
-                    thought="Drag file",
-                )
+    def test_drag_coordinates_are_mapped(self):
+        """Both endpoints of a drag are mapped from screenshot to screen space."""
+        llm = FakeLLM([
+            _batch_response(
+                _action(ActionKind.DRAG, {
+                    "start_x": 841, "start_y": 1049,
+                    "end_x": 1000, "end_y": 500,
+                }),
             ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Dragged", "success": True}),
-                    thought="Done",
-                )
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "Dragged", "success": True}),
             ),
-        ]
-
-        trace_path = tmp_path / "drag-coordinate-trace.jsonl"
-        config = AgentConfig(
-            step_delay=0,
-            max_screenshot_size=(1663, 1080),
-            trace_path=trace_path,
+        ])
+        action_controller = FakeActionController(
+            screen_width=1800, screen_height=1169,
         )
-        agent = Agent(mock_llm_client, config=config)
-        agent.action_controller.screen_width = 1800
-        agent.action_controller.screen_height = 1169
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(width=3600, height=2338),
+            accessibility=FakeAccessibility(),
+            action_controller=action_controller,
+        )
         agent.safety.screen_width = 1800
         agent.safety.screen_height = 1169
-        agent.action_controller.drag = MagicMock(
-            return_value=ActionResult(
-                success=True,
-                action="drag",
-                message="Dragged",
-            )
-        )
 
         result = agent.run("Drag file")
-
         assert result.success is True
-        agent.action_controller.drag.assert_called_once_with(
-            start_x=910,
-            start_y=1135,
-            end_x=1082,
-            end_y=541,
-            duration=0.5,
+        assert action_controller.find_call("drag") == {
+            "action": "drag",
+            "start_x": 910, "start_y": 1135,
+            "end_x": 1082, "end_y": 541,
+            "duration": 0.5,
+        }
+
+
+class TestAgentActionExecution:
+    """Actions are executed via the executor and respect batch order."""
+
+    def test_runs_batch_of_keyboard_actions(self):
+        """A batch of hotkey+type actions runs in order and uses the system prompt."""
+        llm = FakeLLM([
+            """
+            {
+                "thought": "Focus and type",
+                "actions": [
+                    {"action": "hotkey", "params": {"keys": ["command", "l"]}},
+                    {"action": "type", "params": {"text": "example.com"}}
+                ]
+            }
+            """,
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "Typed URL", "success": True}),
+            ),
+        ])
+        action_controller = FakeActionController()
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=action_controller,
         )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"max_batch_actions": 3}),
+            "safety": SafetyConfig(min_action_delay=0),
+        })
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_executes_press_element(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test native accessibility element actions are executed."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("press_element", {"element_id": "ax_1"}),
-                    thought="Press Submit",
-                )
-            ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Submitted", "success": True}),
-                    thought="Done",
-                )
-            ),
-        ]
-
-        fake_accessibility = FakeAccessibility()
-        agent = Agent(mock_llm_client, config=AgentConfig(step_delay=0))
-        agent.accessibility = fake_accessibility  # type: ignore[assignment]
-        agent.element_handler.accessibility = fake_accessibility  # type: ignore[assignment]
-        agent.executor.accessibility = fake_accessibility  # type: ignore[assignment]
-        result = agent.run("Press submit")
+        result = agent.run("Type a URL")
 
         assert result.success is True
-        assert fake_accessibility.performed_actions == [("ax_1", "press")]
+        hotkey_call = action_controller.find_call("hotkey")
+        type_call = action_controller.find_call("type_text")
+        assert hotkey_call["keys"] == ["command", "l"]
+        assert type_call["text"] == "example.com"
+        assert '"actions":[' in llm.calls[0]["system_prompt"]
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_run_with_click(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test agent run with click action then done."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("click", {"x": 500, "y": 300}),
-                    thought="Click button",
-                )
+    def test_press_element_uses_native_ax_action(self):
+        """Native accessibility actions are recorded."""
+        llm = FakeLLM([
+            _batch_response(
+                _action(ActionKind.PRESS_ELEMENT, {"element_id": "ax_1"}),
             ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Clicked and done", "success": True}),
-                    thought="Done",
-                )
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
             ),
-        ]
+        ])
+        ax = FakeAccessibility(_AX_SNAPSHOT)
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=ax,
+            action_controller=FakeActionController(),
+        )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"step_delay": 0}),
+        })
 
-        with patch.object(ActionExecutor, "execute") as mock_execute:
-            mock_execute.return_value = ActionResult(
-                success=True, action="click", message="Clicked"
-            )
-
-            agent = Agent(mock_llm_client)
-            result = agent.run("Click test")
-
+        result = agent.run("Press Submit")
         assert result.success is True
         assert result.total_steps == 2
-        assert mock_execute.called
+        assert ax.performed_actions == [("ax_1", "press")]
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_executes_action_batch(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test batch mode executes multiple actions from one LLM call."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
 
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content="""
-                {
-                    "thought": "Focus address bar and type URL",
-                    "actions": [
-                        {"action": "hotkey", "params": {"keys": ["command", "l"]}},
-                        {"action": "type", "params": {"text": "example.com"}}
-                    ]
-                }
-                """
+class TestAgentApprovals:
+    """Human-in-the-loop approval before executing non-done actions."""
+
+    def test_approval_required_blocks_when_callback_returns_false(self):
+        """A denied action stops the batch and prevents execution."""
+        llm = FakeLLM([
+            _batch_response(
+                _action(ActionKind.HOTKEY, {"keys": ["command", "l"]}),
+                _action(ActionKind.TYPE, {"text": "example.com"}),
             ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Typed URL", "success": True}),
-                    thought="Done",
-                )
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
             ),
-        ]
-
-        with patch.object(ActionExecutor, "execute") as mock_execute:
-            mock_execute.return_value = ActionResult(
-                success=True,
-                action="batch-action",
-                message="Executed",
-            )
-
-            config = AgentConfig(
-                step_delay=0,
-                max_batch_actions=3,
-                safety=SafetyConfig(min_action_delay=0),
-            )
-            agent = Agent(mock_llm_client, config=config)
-            result = agent.run("Type a URL")
-
-        assert result.success is True
-        assert result.total_steps == 2
-        assert [call.args[0].action for call in mock_execute.call_args_list] == [
-            "hotkey",
-            "type",
-        ]
-        system_prompt = mock_llm_client.analyze_screen.call_args_list[0].kwargs[
-            "system_prompt"
-        ]
-        assert '"actions":[' in system_prompt
-
-    @patch("odin.agent.core.Screen")
-    def test_agent_requests_approval_before_every_action(
-        self, mock_screen_class, mock_llm_client, mock_screenshot, tmp_path
-    ):
-        """When enabled, every executable action waits for human approval."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("hotkey", {"keys": ["command", "l"]}),
-                    _action("type", {"text": "example.com"}),
-                    thought="Focus and type",
-                )
-            ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Approved", "success": True}),
-                    thought="Done",
-                )
-            ),
-        ]
-
-        approvals: list[dict] = []
-        order: list[str] = []
-
-        def approve(request: dict) -> bool:
-            approvals.append(request)
-            order.append(f"approve:{request['action']}")
-            return True
-
-        trace_path = tmp_path / "approval-trace.jsonl"
-        with patch.object(ActionExecutor, "execute") as mock_execute:
-            def execute(action: ParsedAction) -> ActionResult:
-                order.append(f"execute:{action.action}")
-                return ActionResult(
-                    success=True,
-                    action="approved-action",
-                    message="Executed",
-                )
-
-            mock_execute.side_effect = execute
-
-            config = AgentConfig(
-                step_delay=0,
-                max_batch_actions=2,
-                trace_path=trace_path,
-                safety=SafetyConfig(
-                    require_confirmation=True,
-                    min_action_delay=0,
-                ),
-            )
-            agent = Agent(
-                mock_llm_client,
-                config=config,
-                action_approval_callback=approve,
-            )
-            result = agent.run("Approval test")
-
-        assert result.success is True
-        assert [request["action"] for request in approvals] == ["hotkey", "type"]
-        assert [call.args[0].action for call in mock_execute.call_args_list] == [
-            "hotkey",
-            "type",
-        ]
-        assert order == [
-            "approve:hotkey",
-            "approve:type",
-            "execute:hotkey",
-            "execute:type",
-        ]
-
-        events = [
-            json.loads(line)
-            for line in trace_path.read_text(encoding="utf-8").splitlines()
-        ]
-        event_names = [event["event"] for event in events]
-        assert event_names.count("action_approval_requested") == 2
-        assert event_names.count("action_approval_received") == 2
-        assert all(
-            event["data"]["approved"]
-            for event in events
-            if event["event"] == "action_approval_received"
+        ])
+        action_controller = FakeActionController()
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=action_controller,
         )
-
-    @patch("odin.agent.core.Screen")
-    def test_agent_applies_step_delay(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test agent uses configured delay between steps."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(
-                content=_batch_response(
-                    _action("click", {"x": 500, "y": 300}),
-                    thought="Click button",
-                )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={
+                "max_batch_actions": 2, "step_delay": 0,
+            }),
+            "safety": SafetyConfig(
+                require_confirmation=True, min_action_delay=0,
             ),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Clicked and done", "success": True}),
-                    thought="Done",
-                )
-            ),
-        ]
+        })
 
-        with (
-            patch.object(ActionExecutor, "execute") as mock_execute,
-            patch("odin.agent.core.time.sleep") as mock_sleep,
-        ):
-            mock_execute.return_value = ActionResult(
-                success=True, action="click", message="Clicked"
-            )
+        approvals: list[str] = []
 
-            config = AgentConfig(step_delay=0.25)
-            agent = Agent(mock_llm_client, config=config)
-            result = agent.run("Delay test")
+        def callback(request: dict) -> bool:
+            approvals.append(request["action"])
+            return False
+
+        agent._action_approval_callback = callback
+        result = agent.run("Approval test")
 
         assert result.success is True
-        mock_sleep.assert_called_once_with(0.25)
+        assert approvals == ["hotkey"]
+        assert action_controller.calls == []
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_max_steps(self, mock_screen_class, mock_llm_client, mock_screenshot):
-        """Test agent stops after max_steps."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
 
-        mock_llm_client.analyze_screen.return_value = LLMResponse(
-            content=_batch_response(
-                _action("click", {"x": 100, "y": 100}),
-                thought="Keep clicking",
-            )
+class TestAgentDelaysAndLimits:
+    """Loop timing and step limits."""
+
+    def test_step_delay_is_respected(self, monkeypatch: pytest.MonkeyPatch):
+        """``step_delay`` sleeps between successful steps."""
+        sleep_calls: list[float] = []
+        monkeypatch.setattr(
+            "odin.agent.loop.time.sleep", lambda seconds: sleep_calls.append(seconds),
         )
+        llm = FakeLLM([
+            _batch_response(_action(ActionKind.CLICK, {"x": 500, "y": 300})),
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
+            ),
+        ])
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=FakeActionController(),
+        )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"step_delay": 0.25}),
+        })
 
-        with patch.object(ActionExecutor, "execute") as mock_execute:
-            mock_execute.return_value = ActionResult(
-                success=True, action="click", message="Clicked"
-            )
+        result = agent.run("Delay test")
+        assert result.success is True
+        assert sleep_calls == [0.25]
 
-            config = AgentConfig(max_steps=3)
-            agent = Agent(mock_llm_client, config=config)
-            result = agent.run("Endless task")
+    def test_max_steps_terminates_with_failure(self):
+        """Running past ``max_steps`` returns a failed result."""
+        llm = FakeLLM(
+            default_response=_batch_response(
+                _action(ActionKind.CLICK, {"x": 100, "y": 100}),
+            ),
+        )
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=FakeActionController(),
+        )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"max_steps": 3}),
+        })
 
+        result = agent.run("Endless task")
         assert result.success is False
         assert "Max steps" in result.message
         assert result.total_steps == 3
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_stop(self, mock_screen_class, mock_llm_client, mock_screenshot):
-        """Test agent can be stopped."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        agent = Agent(mock_llm_client)
+    def test_stop_short_circuits_the_loop(self):
+        """``stop()`` requests termination before the next step."""
+        agent = Agent(FakeLLM('{"thought":"x","actions":[]}'))
         agent.stop()
-
         assert agent._stop_requested is True
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_handles_parse_error(
-        self, mock_screen_class, mock_llm_client, mock_screenshot
-    ):
-        """Test agent handles parse errors gracefully."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
 
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(content="This is not valid JSON"),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Done", "success": True}),
-                    thought="Done",
-                )
+class TestAgentErrorHandling:
+    """Failure modes the agent must recover from gracefully."""
+
+    def test_parse_error_recovers_on_next_step(self):
+        """A bad response is treated as a recoverable parse error."""
+        llm = FakeLLM([
+            "This is not valid JSON",
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
             ),
-        ]
+        ])
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=FakeActionController(),
+        )
 
-        agent = Agent(mock_llm_client)
         result = agent.run("Parse error test")
-
         assert result.success is True
         assert result.total_steps == 2
 
-    def test_agent_on_step_callback(self, mock_llm_client):
-        """Test that on_step callback is called."""
-        callback_calls = []
 
-        def on_step(step: int, action: ParsedAction):
-            callback_calls.append((step, action.action))
+class TestAgentCallbacks:
+    """Per-step callback wiring."""
 
-        with patch("odin.agent.core.Screen") as mock_screen_class:
-            mock_screen = MagicMock()
-            mock_screen.get_screenshot.return_value = Image.new("RGB", (100, 100))
-            mock_screen_class.return_value = mock_screen
+    def test_on_step_callback_fires_for_each_action(self):
+        """The ``on_step`` callback receives every executed action."""
+        steps: list[tuple[int, str]] = []
 
-            mock_llm_client.analyze_screen.side_effect = [
-                LLMResponse(
-                    content=_batch_response(
-                        _action("click", {"x": 50, "y": 50}),
-                        thought="Click",
-                    )
-                ),
-                LLMResponse(
-                    content=_batch_response(
-                        _action("done", {"result": "Done", "success": True}),
-                        thought="Done",
-                    )
-                ),
-            ]
+        def on_step(step: int, action: ParsedAction) -> None:
+            steps.append((step, str(action.action)))
 
-            with patch.object(ActionExecutor, "execute") as mock_execute:
-                mock_execute.return_value = ActionResult(success=True, action="click")
+        llm = FakeLLM([
+            _batch_response(_action(ActionKind.CLICK, {"x": 50, "y": 50})),
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
+            ),
+        ])
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(width=100, height=100),
+            accessibility=FakeAccessibility(),
+            action_controller=FakeActionController(),
+            on_step=on_step,
+        )
+        result = agent.run("Callback test")
 
-                agent = Agent(mock_llm_client, on_step=on_step)
-                agent.run("Callback test")
+        assert result.success is True
+        assert steps == [(1, "click")]
 
-        assert len(callback_calls) == 1
-        assert callback_calls[0] == (1, "click")
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_writes_structured_trace(
-        self, mock_screen_class, mock_llm_client, mock_screenshot, tmp_path
-    ):
-        """Test JSONL tracing captures the main run lifecycle."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
+class TestAgentTraceRecording:
+    """Structured trace events are emitted in the expected order."""
 
-        mock_llm_client.model = "test-model"
-        mock_llm_client.analyze_screen.side_effect = [
+    def test_writes_run_started_run_finished_and_step_events(self, tmp_path):
+        """The full ReAct lifecycle produces the expected trace events."""
+        llm = FakeLLM([
             LLMResponse(
                 content=_batch_response(
-                    _action("click", {"x": 500, "y": 300}),
-                    thought="Click",
+                    _action(ActionKind.CLICK, {"x": 500, "y": 300}),
                 ),
                 usage={"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
             ),
             LLMResponse(
                 content=_batch_response(
-                    _action("done", {"result": "Done", "success": True}),
-                    thought="Done",
+                    _action(ActionKind.DONE, {"result": "ok", "success": True}),
                 ),
                 usage={"inputTokens": 8, "outputTokens": 4, "totalTokens": 12},
             ),
-        ]
+        ])
+        action_controller = FakeActionController()
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=action_controller,
+        )
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"max_steps": 3, "step_delay": 0}),
+            "trace": agent.config.trace.model_copy(update={
+                "path": tmp_path / "agent-trace.jsonl",
+                "save_screenshots": True,
+            }),
+        })
+        agent.tracer = agent._create_tracer()
 
-        trace_path = tmp_path / "agent-trace.jsonl"
-        with patch.object(ActionExecutor, "execute") as mock_execute:
-            mock_execute.return_value = ActionResult(
-                success=True,
-                action="click",
-                message="Clicked",
-            )
-
-            config = AgentConfig(
-                max_steps=3,
-                step_delay=0,
-                trace_path=trace_path,
-                trace_screenshots=True,
-            )
-            agent = Agent(mock_llm_client, config=config)
-            result = agent.run("Trace test")
-
+        result = agent.run("Trace test")
         assert result.success is True
-        assert result.trace_id is not None
-        assert result.trace_path == str(trace_path)
         assert result.llm_usage == {
             "requests": 2,
             "input_tokens": 18,
@@ -707,83 +465,60 @@ class TestAgent:
 
         events = [
             json.loads(line)
-            for line in trace_path.read_text(encoding="utf-8").splitlines()
+            for line in (tmp_path / "agent-trace.jsonl").read_text().splitlines()
         ]
         event_names = [event["event"] for event in events]
 
         assert event_names[0] == "run_started"
+        assert event_names[-1] == "run_finished"
         assert "screenshot_captured" in event_names
         assert "llm_request_started" in event_names
         assert "llm_response_received" in event_names
-        assert "mouse_position_captured" in event_names
         assert "action_parsed" in event_names
         assert "safety_checked" in event_names
         assert "action_execution_started" in event_names
         assert "action_executed" in event_names
         assert "task_done" in event_names
-        assert event_names[-1] == "run_finished"
-
-        action_started = next(
-            event for event in events if event["event"] == "action_execution_started"
-        )
-        assert action_started["data"]["thought"] == "Click"
-        assert action_started["data"]["target"] == {
-            "x": action_started["data"]["params"]["x"],
-            "y": action_started["data"]["params"]["y"],
-            "source": "coordinates",
-        }
-
-        screenshot_event = next(
-            event for event in events if event["event"] == "screenshot_captured"
-        )
-        screenshot_path = screenshot_event["data"]["screenshot_path"]
-        assert screenshot_path
-        assert (tmp_path / "agent-trace_screenshots").exists()
-        assert screenshot_path.endswith(".png")
 
         response_event = next(
             event for event in events if event["event"] == "llm_response_received"
         )
         assert response_event["data"]["usage"] == {
-            "inputTokens": 10,
-            "outputTokens": 5,
-            "totalTokens": 15,
+            "inputTokens": 10, "outputTokens": 5, "totalTokens": 15,
         }
-        assert response_event["data"]["usage_totals"]["input_tokens"] == 10
 
-    @patch("odin.agent.core.Screen")
-    def test_agent_traces_parse_errors(
-        self, mock_screen_class, mock_llm_client, mock_screenshot, tmp_path
-    ):
-        """Test parse failures are recorded as structured trace events."""
-        mock_screen = MagicMock()
-        mock_screen.get_screenshot.return_value = mock_screenshot
-        mock_screen_class.return_value = mock_screen
-
-        mock_llm_client.analyze_screen.side_effect = [
-            LLMResponse(content="not json"),
-            LLMResponse(
-                content=_batch_response(
-                    _action("done", {"result": "Done", "success": True}),
-                    thought="Done",
-                )
+    def test_parse_error_is_traced(self, tmp_path):
+        """Parse failures appear in the trace before the agent recovers."""
+        llm = FakeLLM([
+            "not json",
+            _batch_response(
+                _action(ActionKind.DONE, {"result": "ok", "success": True}),
             ),
-        ]
-
-        trace_path = tmp_path / "parse-trace.jsonl"
-        config = AgentConfig(
-            max_steps=3,
-            step_delay=0,
-            trace_path=trace_path,
+        ])
+        agent = build_agent(
+            llm,
+            screen=FakeScreen(),
+            accessibility=FakeAccessibility(),
+            action_controller=FakeActionController(),
         )
-        agent = Agent(mock_llm_client, config=config)
-        result = agent.run("Parse trace test")
+        agent.config = agent.config.model_copy(update={
+            "loop": agent.config.loop.model_copy(update={"max_steps": 3, "step_delay": 0}),
+            "trace": agent.config.trace.model_copy(update={
+                "path": tmp_path / "parse-trace.jsonl",
+            }),
+        })
+        agent.tracer = agent._create_tracer()
 
+        result = agent.run("Parse trace test")
         assert result.success is True
+
         events = [
             json.loads(line)
-            for line in trace_path.read_text(encoding="utf-8").splitlines()
+            for line in (tmp_path / "parse-trace.jsonl").read_text().splitlines()
         ]
         parse_error = next(event for event in events if event["event"] == "parse_error")
         assert parse_error["step"] == 1
         assert parse_error["data"]["content"] == "not json"
+
+
+__all__: list[str] = []

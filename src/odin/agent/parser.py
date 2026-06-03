@@ -3,45 +3,12 @@
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from odin.action.keys import normalize_keys
+from odin.agent.actions import VALID_ACTIONS, ActionKind
 
-ActionType = Literal[
-    "click",
-    "double_click",
-    "double_click_element",
-    "drag",
-    "move",
-    "type",
-    "hotkey",
-    "scroll",
-    "click_element",
-    "focus_element",
-    "press_element",
-    "scroll_element",
-    "set_text",
-    "wait",
-    "done",
-]
-
-VALID_ACTIONS: tuple[str, ...] = (
-    "click",
-    "click_element",
-    "double_click",
-    "double_click_element",
-    "drag",
-    "focus_element",
-    "move",
-    "press_element",
-    "type",
-    "set_text",
-    "hotkey",
-    "scroll",
-    "scroll_element",
-    "wait",
-    "done",
-)
+ActionType = ActionKind
 
 CONTROL_FIELDS: set[str] = {"action", "params", "thought"}
 
@@ -54,6 +21,9 @@ class ParsedAction:
     action: ActionType
     params: dict[str, Any]
     raw_response: str
+
+    def __post_init__(self) -> None:
+        self.action = ActionKind(self.action)
 
 
 class ParseError(Exception):
@@ -110,7 +80,6 @@ def _parse_action_object(
 ) -> ParsedAction:
     """Parse one action object into a ParsedAction."""
     if "action" not in data:
-        # Check if the object contains a single key that is a valid action (like {"hotkey": {...}})
         keys = [k for k in data if k not in CONTROL_FIELDS]
         if len(keys) == 1 and keys[0] in VALID_ACTIONS:
             action_type = keys[0]
@@ -190,7 +159,7 @@ def _parse_action_object(
 
     return ParsedAction(
         thought=str(data.get("thought", parent_thought)),
-        action=action,  # type: ignore
+        action=ActionKind(action),
         params=params,
         raw_response=raw_response,
     )

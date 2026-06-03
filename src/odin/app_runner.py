@@ -127,13 +127,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=AgentConfig().max_steps,
+        default=AgentConfig().loop.max_steps,
         help="Maximum agent steps.",
     )
     parser.add_argument(
         "--max-batch-actions",
         type=int,
-        default=AgentConfig().max_batch_actions,
+        default=AgentConfig().loop.max_batch_actions,
         help="Maximum actions accepted per LLM response.",
     )
     parser.add_argument(
@@ -207,10 +207,14 @@ def main(argv: list[str] | None = None) -> int:
         agent = Agent(
             llm,
             config=AgentConfig(
-                max_steps=args.max_steps,
-                trace_path=args.trace_path,
-                trace_screenshots=args.trace_screenshots,
-                max_batch_actions=max(1, args.max_batch_actions),
+                loop=AgentConfig().loop.model_copy(update={
+                    "max_steps": args.max_steps,
+                    "max_batch_actions": max(1, args.max_batch_actions),
+                }),
+                trace=AgentConfig().trace.model_copy(update={
+                    "path": args.trace_path,
+                    "save_screenshots": args.trace_screenshots,
+                }),
                 safety=SafetyConfig(
                     require_confirmation=args.require_action_approval,
                 ),

@@ -44,8 +44,10 @@ def main():
 
     # Configure the agent
     config = AgentConfig(
-        max_steps=5,
-        max_batch_actions=2,
+        loop=AgentConfig().loop.model_copy(update={
+            "max_steps": 5,
+            "max_batch_actions": 2,
+        }),
     )
 
     # Initialize agent

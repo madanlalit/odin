@@ -1,6 +1,7 @@
 """Command-line entrypoint for running the Odin agent."""
 
 import argparse
+import logging
 import os
 import sys
 
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 from odin import Agent, AgentConfig, create_client
 from odin.action.safety import SafetyConfig
 from odin.llm.prompts import build_system_prompt
+from odin.log import logger
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -34,7 +36,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-steps",
         type=int,
-        default=AgentConfig().max_steps,
+        default=AgentConfig().loop.max_steps,
         help="Maximum number of agent steps.",
     )
     parser.add_argument(
@@ -45,7 +47,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-batch-actions",
         type=int,
-        default=AgentConfig().max_batch_actions,
+        default=AgentConfig().loop.max_batch_actions,
         help="Maximum actions accepted per LLM response.",
     )
     parser.add_argument(
@@ -63,6 +65,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Prompt before executing every non-done action.",
     )
+    parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Emit debug logs to stderr.",
+    )
     return parser
 
 
@@ -71,6 +78,9 @@ def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
 
     if args.show_system_prompt:
         print(
@@ -97,10 +107,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     config = AgentConfig(
-        max_steps=args.max_steps,
-        trace_path=args.trace_path,
-        trace_screenshots=args.trace_screenshots,
-        max_batch_actions=max(1, args.max_batch_actions),
+        loop=AgentConfig().loop.model_copy(update={
+            "max_steps": args.max_steps,
+            "max_batch_actions": max(1, args.max_batch_actions),
+        }),
+        trace=AgentConfig().trace.model_copy(update={
+            "path": args.trace_path,
+            "save_screenshots": args.trace_screenshots,
+        }),
         safety=SafetyConfig(require_confirmation=args.require_action_approval),
     )
     agent = Agent(
@@ -116,6 +130,9 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("Interrupted by user.")
         return 130
+    except Exception:
+        logger.exception("agent run failed")
+        return 1
     finally:
         llm.close()
 
