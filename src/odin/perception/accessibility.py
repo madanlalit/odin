@@ -235,11 +235,6 @@ class Accessibility:
             return info.frame
         return None
 
-    def describe(self, element_id: str) -> dict[str, Any] | None:
-        """Return prompt-safe details for an element."""
-        info = self._info_by_id.get(element_id)
-        return info.to_dict() if info else None
-
     def _load_ax(self) -> Any | None:
         """Load PyObjC ApplicationServices only when accessibility is used."""
         if self._ax is not None:

@@ -10,10 +10,6 @@ from PIL import Image
 from odin.llm.base import LLMResponse
 from odin.llm.context import format_screen_context
 
-DEFAULT_TOKEN_RATES_PER_1K: dict[str, tuple[float, float]] = {
-    "anthropic.claude-opus-4-7": (0.005, 0.025),
-}
-
 
 class BedrockLLMClient:
     """
@@ -29,8 +25,6 @@ class BedrockLLMClient:
         region_name: str | None = None,
         profile_name: str | None = None,
         inference_config: dict[str, Any] | None = None,
-        input_cost_per_1k_tokens: float | None = None,
-        output_cost_per_1k_tokens: float | None = None,
         client: Any | None = None,
     ):
         """
@@ -41,25 +35,10 @@ class BedrockLLMClient:
             region_name: AWS region. Uses the AWS SDK default chain if omitted.
             profile_name: AWS profile. Uses the AWS SDK default chain if omitted.
             inference_config: Optional Bedrock Converse inferenceConfig.
-            input_cost_per_1k_tokens: Optional USD input token price per 1K tokens.
-            output_cost_per_1k_tokens: Optional USD output token price per 1K tokens.
             client: Optional injected bedrock-runtime client, primarily for tests.
         """
         self.model = model
         self.inference_config = inference_config
-        default_input_rate, default_output_rate = _default_token_rates_per_1k(model)
-        self.input_cost_per_1k_tokens = _resolve_token_rate(
-            input_cost_per_1k_tokens,
-            per_1k_env="ODIN_BEDROCK_INPUT_COST_PER_1K_TOKENS",
-            per_1m_env="ODIN_BEDROCK_INPUT_COST_PER_1M_TOKENS",
-            default_value=default_input_rate,
-        )
-        self.output_cost_per_1k_tokens = _resolve_token_rate(
-            output_cost_per_1k_tokens,
-            per_1k_env="ODIN_BEDROCK_OUTPUT_COST_PER_1K_TOKENS",
-            per_1m_env="ODIN_BEDROCK_OUTPUT_COST_PER_1M_TOKENS",
-            default_value=default_output_rate,
-        )
 
         if client is not None:
             self._client = client
@@ -172,7 +151,6 @@ class BedrockLLMClient:
             content=self._extract_text(content_blocks),
             reasoning=self._extract_reasoning(content_blocks),
             usage=data.get("usage"),
-            cost=self._cost_metrics(data.get("usage")),
         )
 
     def _bedrock_history(
@@ -260,56 +238,6 @@ class BedrockLLMClient:
 
         return "\n".join(reasoning) if reasoning else None
 
-    def _cost_metrics(self, usage: Any) -> dict[str, Any] | None:
-        """Estimate Bedrock request cost from usage and configured rates."""
-        if not isinstance(usage, dict):
-            return None
-
-        input_tokens = _int_or_zero(usage.get("inputTokens"))
-        output_tokens = _int_or_zero(usage.get("outputTokens"))
-        total_tokens = _int_or_zero(usage.get("totalTokens"))
-        cache_read_input_tokens = _int_or_zero(usage.get("cacheReadInputTokens"))
-        cache_write_input_tokens = _int_or_zero(usage.get("cacheWriteInputTokens"))
-
-        metrics: dict[str, Any] = {
-            "provider": "bedrock",
-            "model": self.model,
-            "currency": "USD",
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "cache_read_input_tokens": cache_read_input_tokens,
-            "cache_write_input_tokens": cache_write_input_tokens,
-            "estimated": False,
-            "input_cost_usd": None,
-            "output_cost_usd": None,
-            "total_cost_usd": None,
-            "input_cost_per_1k_tokens": self.input_cost_per_1k_tokens,
-            "output_cost_per_1k_tokens": self.output_cost_per_1k_tokens,
-        }
-
-        if (
-            self.input_cost_per_1k_tokens is None
-            or self.output_cost_per_1k_tokens is None
-        ):
-            metrics["reason"] = (
-                "Set ODIN_BEDROCK_INPUT_COST_PER_1K_TOKENS and "
-                "ODIN_BEDROCK_OUTPUT_COST_PER_1K_TOKENS to estimate cost."
-            )
-            return metrics
-
-        input_cost = input_tokens * self.input_cost_per_1k_tokens / 1000
-        output_cost = output_tokens * self.output_cost_per_1k_tokens / 1000
-        metrics.update(
-            {
-                "estimated": True,
-                "input_cost_usd": input_cost,
-                "output_cost_usd": output_cost,
-                "total_cost_usd": input_cost + output_cost,
-            }
-        )
-        return metrics
-
     def close(self) -> None:
         """Close the underlying SDK client if supported."""
         close = getattr(self._client, "close", None)
@@ -321,57 +249,3 @@ class BedrockLLMClient:
 
     def __exit__(self, *args):
         self.close()
-
-
-def _resolve_token_rate(
-    explicit_value: float | None,
-    *,
-    per_1k_env: str,
-    per_1m_env: str,
-    default_value: float | None = None,
-) -> float | None:
-    """Resolve a USD token rate per 1K tokens from args or environment."""
-    if explicit_value is not None:
-        return explicit_value
-
-    per_1k = _float_env(per_1k_env)
-    if per_1k is not None:
-        return per_1k
-
-    per_1m = _float_env(per_1m_env)
-    if per_1m is not None:
-        return per_1m / 1000
-
-    return default_value
-
-
-def _default_token_rates_per_1k(model: str) -> tuple[float | None, float | None]:
-    """Return built-in USD per-1K rates for known Bedrock model IDs."""
-    normalized_model = model.lower().removeprefix("bedrock/")
-    for model_suffix, rates in DEFAULT_TOKEN_RATES_PER_1K.items():
-        if normalized_model == model_suffix or normalized_model.endswith(
-            f".{model_suffix}"
-        ):
-            return rates
-    return None, None
-
-
-def _float_env(name: str) -> float | None:
-    """Read a positive float env var if present."""
-    raw_value = os.environ.get(name)
-    if not raw_value:
-        return None
-    try:
-        return float(raw_value)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be a number.") from exc
-
-
-def _int_or_zero(value: Any) -> int:
-    """Convert common numeric values to int, defaulting to zero."""
-    if isinstance(value, bool) or value is None:
-        return 0
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return 0

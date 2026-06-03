@@ -475,18 +475,18 @@ class TestValidateActionParams:
         """
         actions = parse_llm_actions(response)
         assert len(actions) == 5
-        
+
         assert actions[0].action == "hotkey"
         assert actions[0].params["keys"] == ["command", "space"]
-        
+
         assert actions[1].action == "wait"
         assert actions[1].params["seconds"] == 1
-        
+
         assert actions[2].action == "type"
         assert actions[2].params["text"] == "Google Chrome"
-        
+
         assert actions[3].action == "click_element"
         assert actions[3].params["element_id"] == "ax_12"
-        
+
         assert actions[4].action == "scroll"
         assert actions[4].params["direction"] == "down"

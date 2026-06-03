@@ -74,12 +74,6 @@ class FakeAccessibility:
             return self._frame
         return None
 
-    def describe(self, element_id: str):
-        for element in self.snapshot.elements:
-            if element.id == element_id:
-                return element.to_dict()
-        return None
-
 
 class TestAgent:
     """Tests for the main Agent class."""
@@ -672,13 +666,6 @@ class TestAgent:
                     thought="Click",
                 ),
                 usage={"inputTokens": 10, "outputTokens": 5, "totalTokens": 15},
-                cost={
-                    "estimated": True,
-                    "currency": "USD",
-                    "input_cost_usd": 0.001,
-                    "output_cost_usd": 0.002,
-                    "total_cost_usd": 0.003,
-                },
             ),
             LLMResponse(
                 content=_batch_response(
@@ -686,13 +673,6 @@ class TestAgent:
                     thought="Done",
                 ),
                 usage={"inputTokens": 8, "outputTokens": 4, "totalTokens": 12},
-                cost={
-                    "estimated": True,
-                    "currency": "USD",
-                    "input_cost_usd": 0.0008,
-                    "output_cost_usd": 0.0016,
-                    "total_cost_usd": 0.0024,
-                },
             ),
         ]
 
@@ -723,11 +703,6 @@ class TestAgent:
             "total_tokens": 27,
             "cache_read_input_tokens": 0,
             "cache_write_input_tokens": 0,
-            "estimated_input_cost_usd": 0.0018,
-            "estimated_output_cost_usd": 0.0036,
-            "estimated_cost_usd": 0.0054,
-            "cost_estimated": True,
-            "currency": "USD",
         }
 
         events = [
@@ -774,13 +749,7 @@ class TestAgent:
             "outputTokens": 5,
             "totalTokens": 15,
         }
-        assert response_event["data"]["cost"]["total_cost_usd"] == 0.003
         assert response_event["data"]["usage_totals"]["input_tokens"] == 10
-
-        run_finished = next(
-            event for event in events if event["event"] == "run_finished"
-        )
-        assert run_finished["data"]["llm_usage"]["estimated_cost_usd"] == 0.0054
 
     @patch("odin.agent.core.Screen")
     def test_agent_traces_parse_errors(

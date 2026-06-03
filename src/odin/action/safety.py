@@ -1,11 +1,12 @@
 """Safety checks and validation for actions."""
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from pydantic import BaseModel
 
-from odin.platform.macos import MacOSBackend
+from odin.platform.base import PlatformBackend, default_backend
 
 
 class SafetyConfig(BaseModel):
@@ -20,20 +21,80 @@ class SafetyConfig(BaseModel):
     bounds_margin: int = 10
 
 
-@dataclass
+@dataclass(init=False)
 class SafetyController:
     """
     Safety layer for action validation and rate limiting.
 
     Provides checks to prevent accidental damage from automated actions.
+    The screen size must be supplied at construction (typically by the
+    agent that owns both the :class:`ActionController` and this controller);
+    call :meth:`refresh_screen_size` to re-read after a display change.
     """
 
-    config: SafetyConfig = field(default_factory=SafetyConfig)
-    _action_times: list[float] = field(default_factory=list)
-    _last_action_time: float = 0.0
+    config: SafetyConfig
+    screen_width: int
+    screen_height: int
+    _action_times: list[float] = field(default_factory=list, repr=False)
+    _last_action_time: float = field(default=0.0, repr=False)
+    _screen_size_provider: Callable[[], tuple[int, int]] | None = field(
+        default=None, repr=False, compare=False,
+    )
 
-    def __post_init__(self):
-        self.screen_width, self.screen_height = MacOSBackend.screen_size()
+    def __init__(
+        self,
+        config: SafetyConfig | None = None,
+        *,
+        screen_size: tuple[int, int] | None = None,
+        backend: PlatformBackend | None = None,
+    ) -> None:
+        """Initialize the safety controller.
+
+        Args:
+            config: Optional safety configuration.
+            screen_size: Optional ``(width, height)`` for bounds checks. If
+                omitted, the controller starts with ``(0, 0)`` and the
+                caller is expected to populate it (or use
+                :meth:`from_backend`).
+            backend: Optional platform backend. When provided without
+                ``screen_size``, the initial dimensions are read from it.
+        """
+        self.config = config or SafetyConfig()
+        self._action_times = []
+        self._last_action_time = 0.0
+        self._screen_size_provider = None
+
+        if screen_size is not None:
+            self.screen_width, self.screen_height = screen_size
+        elif backend is not None:
+            self.screen_width, self.screen_height = backend.screen_size()
+        else:
+            self.screen_width = 0
+            self.screen_height = 0
+
+    def refresh_screen_size(
+        self,
+        backend: PlatformBackend | None = None,
+    ) -> None:
+        """Re-read the screen dimensions from ``backend`` (or the default)."""
+        provider = self._screen_size_provider
+        if provider is not None:
+            self.screen_width, self.screen_height = provider()
+            return
+        if backend is None:
+            backend = default_backend()
+        self.screen_width, self.screen_height = backend.screen_size()
+
+    @classmethod
+    def from_backend(
+        cls,
+        backend: PlatformBackend,
+        config: SafetyConfig | None = None,
+    ) -> "SafetyController":
+        """Construct a controller that lazily reads its screen size from ``backend``."""
+        controller = cls(config=config, backend=backend)
+        controller._screen_size_provider = backend.screen_size
+        return controller
 
     def validate_coordinates(self, x: int, y: int) -> tuple[bool, str | None]:
         """

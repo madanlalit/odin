@@ -80,12 +80,3 @@ error and the user never sees your actual reason.
 After typing in a field, use hotkey {{"keys":["return"]}} when submission is
 needed. Do not use markdown or explain outside the JSON object.
 """
-
-SIMPLE_PROMPT = """\
-Analyze the screenshot and execute actions to complete the task.
-
-Actions: click_element(element_id), press_element(element_id), set_text(element_id,text),
-click(x,y), drag(start_x,start_y,end_x,end_y), type(text), hotkey(keys), scroll(direction), done(result,success)
-
-Respond with JSON: {"thought":"...","actions":[{"action":"...","params":{...}}]}
-"""

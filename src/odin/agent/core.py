@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -128,7 +129,10 @@ class Agent:
         self.processing = Processing()
         self.accessibility = Accessibility()
         self.action_controller = ActionController()
-        self.safety = SafetyController(self.config.safety)
+        self.safety = SafetyController.from_backend(
+            self.action_controller._backend,
+            self.config.safety,
+        )
         self.element_handler = ElementActionHandler(
             self.accessibility, self.action_controller, self.safety,
         )
@@ -136,7 +140,6 @@ class Agent:
             self.action_controller, self.element_handler, self.accessibility,
         )
         self.memory = AgentMemory()
-        self._accessibility_snapshot: AccessibilitySnapshot | None = None
 
         self.status = AgentStatus.IDLE
         self._stop_requested = False
@@ -181,7 +184,6 @@ class Agent:
                 screenshot = self._capture_screen(step)
                 final_screenshot = screenshot
                 accessibility_snapshot = self._capture_accessibility(step)
-                self._accessibility_snapshot = accessibility_snapshot
                 mouse_context = self._mouse_context(screenshot)
                 self.tracer.event(
                     "mouse_position_captured",
@@ -227,7 +229,6 @@ class Agent:
                             "content": response.content,
                             "reasoning": response.reasoning,
                             "usage": response.usage,
-                            "cost": response.cost,
                             "usage_totals": llm_usage,
                         },
                     )
@@ -454,7 +455,6 @@ class Agent:
                         self.memory.add_action(
                             action,
                             success=result.success,
-                            message=result.message or result.error,
                         )
 
                         self.memory.add_message(
@@ -642,83 +642,34 @@ class Agent:
             "model": getattr(self.llm, "model", None),
         }
 
+    _TOKEN_USAGE_KEYS: tuple[tuple[str, str], ...] = (
+        ("input_tokens", "inputTokens"),
+        ("output_tokens", "outputTokens"),
+        ("total_tokens", "totalTokens"),
+        ("cache_read_input_tokens", "cacheReadInputTokens"),
+        ("cache_write_input_tokens", "cacheWriteInputTokens"),
+    )
+
     def _empty_llm_usage(self) -> dict[str, Any]:
         """Return a mutable run-level LLM usage accumulator."""
-        return {
-            "requests": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "total_tokens": 0,
-            "cache_read_input_tokens": 0,
-            "cache_write_input_tokens": 0,
-            "estimated_input_cost_usd": 0.0,
-            "estimated_output_cost_usd": 0.0,
-            "estimated_cost_usd": 0.0,
-            "cost_estimated": False,
-            "currency": "USD",
-        }
+        summary: dict[str, Any] = {"requests": 0}
+        for summary_key, _ in self._TOKEN_USAGE_KEYS:
+            summary[summary_key] = 0
+        return summary
 
     def _record_llm_metrics(self, response: LLMResponse) -> dict[str, Any]:
-        """Accumulate per-call token usage and estimated cost."""
+        """Accumulate per-call token usage."""
         self._llm_usage["requests"] += 1
 
         usage = response.usage if isinstance(response.usage, dict) else {}
-        self._llm_usage["input_tokens"] += self._metric_int(usage, "inputTokens")
-        self._llm_usage["output_tokens"] += self._metric_int(usage, "outputTokens")
-        self._llm_usage["total_tokens"] += self._metric_int(usage, "totalTokens")
-        self._llm_usage["cache_read_input_tokens"] += self._metric_int(
-            usage, "cacheReadInputTokens"
-        )
-        self._llm_usage["cache_write_input_tokens"] += self._metric_int(
-            usage, "cacheWriteInputTokens"
-        )
+        for summary_key, usage_key in self._TOKEN_USAGE_KEYS:
+            value = usage.get(usage_key)
+            if isinstance(value, bool) or value is None:
+                continue
+            with suppress(TypeError, ValueError):
+                self._llm_usage[summary_key] += int(value)
 
-        cost = response.cost if isinstance(response.cost, dict) else {}
-        if cost.get("estimated"):
-            self._llm_usage["cost_estimated"] = True
-            self._llm_usage["currency"] = cost.get("currency", "USD")
-            self._llm_usage["estimated_input_cost_usd"] += self._metric_float(
-                cost, "input_cost_usd"
-            )
-            self._llm_usage["estimated_output_cost_usd"] += self._metric_float(
-                cost, "output_cost_usd"
-            )
-            self._llm_usage["estimated_cost_usd"] += self._metric_float(
-                cost, "total_cost_usd"
-            )
-
-        return self._llm_usage_summary()
-
-    @staticmethod
-    def _metric_int(metrics: dict[str, Any], key: str) -> int:
-        """Read an integer metric with a zero default."""
-        value = metrics.get(key)
-        if isinstance(value, bool) or value is None:
-            return 0
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return 0
-
-    @staticmethod
-    def _metric_float(metrics: dict[str, Any], key: str) -> float:
-        """Read a float metric with a zero default."""
-        value = metrics.get(key)
-        if isinstance(value, bool) or value is None:
-            return 0.0
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return 0.0
-
-    def _llm_usage_summary(self) -> dict[str, Any]:
-        """Return trace/result-safe LLM usage totals."""
-        summary = self._llm_usage.copy()
-        if not summary["cost_estimated"]:
-            summary["estimated_input_cost_usd"] = None
-            summary["estimated_output_cost_usd"] = None
-            summary["estimated_cost_usd"] = None
-        return summary
+        return self._llm_usage.copy()
 
     def _system_prompt(self) -> str:
         """Build the system prompt for the current agent configuration."""
@@ -810,7 +761,7 @@ class Agent:
         """Emit run_finished and build the agent result."""
         duration_seconds = time.perf_counter() - start_perf
         trace_path = str(self.tracer.path) if self.tracer.path else None
-        llm_usage = self._llm_usage_summary()
+        llm_usage = self._llm_usage.copy()
         self.tracer.event(
             "run_finished",
             data={
@@ -878,7 +829,6 @@ class Agent:
 
             self._last_screenshot_size = (screenshot.width, screenshot.height)
 
-            self.memory.add_screenshot(screenshot)
             screenshot_path = self.tracer.save_image(
                 screenshot,
                 step=step,

@@ -1,4 +1,4 @@
-"""Action controller for GUI automation using macOS Quartz backend."""
+"""Action controller for GUI automation using a platform backend."""
 
 import time
 from typing import Literal
@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from odin.action.keys import normalize_keys
-from odin.platform.macos import MacOSBackend
+from odin.platform.base import PlatformBackend, default_backend
 
 
 class ActionResult(BaseModel):
@@ -20,15 +20,21 @@ class ActionResult(BaseModel):
 
 class ActionController:
     """
-    Controller for executing GUI actions via the macOS Quartz backend.
+    Controller for executing GUI actions via a :class:`PlatformBackend`.
 
     Provides methods for mouse movements, clicks, keyboard input,
-    and other UI interactions.
+    and other UI interactions. Pass a backend explicitly to use a custom
+    implementation; otherwise the platform default is used.
     """
 
-    def __init__(self):
-        """Initialize the action controller."""
-        self._backend = MacOSBackend()
+    def __init__(self, backend: PlatformBackend | None = None):
+        """Initialize the action controller.
+
+        Args:
+            backend: Optional platform backend. Defaults to the platform's
+                default backend (currently macOS Quartz).
+        """
+        self._backend: PlatformBackend = backend or default_backend()
         self.screen_width, self.screen_height = self._backend.screen_size()
 
     def _validate_coordinates(self, x: int, y: int) -> bool:
@@ -96,19 +102,6 @@ class ActionController:
             )
         except Exception as e:
             return ActionResult(success=False, action="double_click", error=str(e))
-
-    def right_click(self, x: int, y: int) -> ActionResult:
-        """
-        Right-click at the specified coordinates.
-
-        Args:
-            x: X coordinate
-            y: Y coordinate
-
-        Returns:
-            ActionResult indicating success or failure
-        """
-        return self.click(x, y, button="right")
 
     def move(self, x: int, y: int) -> ActionResult:
         """

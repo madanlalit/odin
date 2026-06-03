@@ -129,9 +129,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Input tokens: {result.llm_usage.get('input_tokens', 0)}")
         print(f"Output tokens: {result.llm_usage.get('output_tokens', 0)}")
         print(f"Total tokens: {result.llm_usage.get('total_tokens', 0)}")
-        estimated_cost = result.llm_usage.get("estimated_cost_usd")
-        if estimated_cost is not None:
-            print(f"Estimated LLM cost: ${estimated_cost:.6f}")
     if result.trace_path:
         print(f"Trace: {result.trace_path}")
     return 0 if result.success else 1

@@ -9,7 +9,7 @@ text entry via the system clipboard.
 from __future__ import annotations
 
 import time
-from typing import Literal, cast
+from typing import Literal
 
 from PIL import Image
 
@@ -428,56 +428,3 @@ class MacOSBackend:
                 "height": int(bounds.get("Height", 0)),
             })
         return windows
-
-    @staticmethod
-    def focused_window_id() -> int | None:
-        """Return the window-ID of the frontmost application's key window.
-
-        Falls back to the first on-screen window owned by the frontmost app.
-        """
-        app_info = MacOSBackend.frontmost_app()
-        pid = app_info.get("pid")
-        if pid is None:
-            return None
-        windows = MacOSBackend.window_list(for_pid=int(pid))
-        if not windows:
-            return None
-        return cast(int, windows[0]["window_id"])
-
-
-    @staticmethod
-    def check_accessibility_permission() -> bool:
-        """Return True if the process has Accessibility permission."""
-        try:
-            import ApplicationServices  # type: ignore[import-untyped]
-            return bool(ApplicationServices.AXIsProcessTrusted())
-        except Exception:
-            return False
-
-    @staticmethod
-    def check_screen_recording_permission() -> bool:
-        """Return True if the process can capture the screen."""
-        Quartz = _load_quartz()
-        try:
-            preflight = getattr(
-                Quartz, "CGPreflightScreenCaptureAccess", None,
-            )
-            if preflight is not None:
-                return bool(preflight())
-            img = Quartz.CGWindowListCreateImage(
-                Quartz.CGRectMake(0, 0, 1, 1),
-                Quartz.kCGWindowListOptionOnScreenOnly,
-                Quartz.kCGNullWindowID,
-                Quartz.kCGWindowImageDefault,
-            )
-            return img is not None
-        except Exception:
-            return False
-
-    @staticmethod
-    def request_screen_recording_permission() -> None:
-        """Prompt the user for Screen Recording permission (macOS 10.15+)."""
-        Quartz = _load_quartz()
-        request = getattr(Quartz, "CGRequestScreenCaptureAccess", None)
-        if request is not None:
-            request()

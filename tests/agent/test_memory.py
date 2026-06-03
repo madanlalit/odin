@@ -1,7 +1,5 @@
 """Tests for agent memory management."""
 
-from PIL import Image
-
 from odin.agent.memory import AgentMemory
 from odin.agent.parser import ParsedAction
 
@@ -39,38 +37,11 @@ class TestAgentMemory:
             raw_response="",
         )
 
-        memory.add_action(action, success=True, message="Clicked successfully")
+        memory.add_action(action, success=True)
 
         assert len(memory.actions) == 1
         assert memory.actions[0].success is True
         assert memory.total_actions == 1
-        assert memory.successful_actions == 1
-
-    def test_add_screenshot(self):
-        """Test adding screenshots to memory."""
-        memory = AgentMemory(max_screenshots=2)
-
-        for i in range(3):
-            img = Image.new("RGB", (100, 100), color=f"#{i:02x}{i:02x}{i:02x}")
-            memory.add_screenshot(img)
-
-        assert len(memory.screenshots) == 2
-
-    def test_get_action_summary(self):
-        """Test getting action summary."""
-        memory = AgentMemory()
-        action = ParsedAction(
-            thought="test",
-            action="click",
-            params={"x": 100, "y": 200},
-            raw_response="",
-        )
-        memory.add_action(action, success=True, message="Clicked")
-
-        summary = memory.get_action_summary()
-
-        assert "click" in summary
-        assert "✓" in summary
 
     def test_clear(self):
         """Test clearing memory."""

@@ -63,6 +63,16 @@ class ParseError(Exception):
 def _extract_json_object(response: str) -> dict[str, Any]:
     """Extract the most likely JSON object from model output text."""
     decoder = json.JSONDecoder()
+
+    stripped = response.strip()
+    if stripped.startswith("{"):
+        try:
+            parsed, _ = decoder.raw_decode(stripped)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
     parsed_objects: list[dict[str, Any]] = []
     first_decode_error: json.JSONDecodeError | None = None
     found_json_start = False
@@ -101,7 +111,7 @@ def _parse_action_object(
     """Parse one action object into a ParsedAction."""
     if "action" not in data:
         # Check if the object contains a single key that is a valid action (like {"hotkey": {...}})
-        keys = [k for k in data.keys() if k not in CONTROL_FIELDS]
+        keys = [k for k in data if k not in CONTROL_FIELDS]
         if len(keys) == 1 and keys[0] in VALID_ACTIONS:
             action_type = keys[0]
             val = data[action_type]

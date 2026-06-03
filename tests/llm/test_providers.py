@@ -121,42 +121,12 @@ def test_bedrock_client_uses_aws_region_name_env_var():
     session.client.assert_called_once_with("bedrock-runtime")
 
 
-def test_bedrock_client_reads_cost_rate_env_vars():
-    """Bedrock cost rates can be configured from env vars."""
-    sdk_client = MagicMock()
-    with patch.dict(
-        os.environ,
-        {
-            "ODIN_BEDROCK_INPUT_COST_PER_1K_TOKENS": "0.01",
-            "ODIN_BEDROCK_OUTPUT_COST_PER_1K_TOKENS": "0.02",
-        },
-        clear=True,
-    ):
-        client = BedrockLLMClient(
-            model="amazon.nova-lite-v1:0",
-            client=sdk_client,
-        )
+def test_bedrock_client_does_not_expose_cost_fields():
+    """Bedrock client no longer tracks cost metrics."""
+    client = BedrockLLMClient(model="amazon.nova-lite-v1:0", client=MagicMock())
 
-    assert client.input_cost_per_1k_tokens == 0.01
-    assert client.output_cost_per_1k_tokens == 0.02
-
-
-@pytest.mark.parametrize(
-    "model",
-    [
-        "anthropic.claude-opus-4-7",
-        "us.anthropic.claude-opus-4-7",
-        "global.anthropic.claude-opus-4-7",
-        "bedrock/global.anthropic.claude-opus-4-7",
-    ],
-)
-def test_bedrock_client_uses_builtin_opus_47_cost_rates(model):
-    """Claude Opus 4.7 uses built-in standard Bedrock token rates."""
-    with patch.dict(os.environ, {}, clear=True):
-        client = BedrockLLMClient(model=model, client=MagicMock())
-
-    assert client.input_cost_per_1k_tokens == 0.005
-    assert client.output_cost_per_1k_tokens == 0.025
+    assert not hasattr(client, "input_cost_per_1k_tokens")
+    assert not hasattr(client, "output_cost_per_1k_tokens")
 
 
 def test_openrouter_analyze_screen_sends_compact_context_text():
@@ -230,8 +200,6 @@ def test_bedrock_analyze_screen_uses_converse_image_bytes():
     }
     client = BedrockLLMClient(
         model="amazon.nova-lite-v1:0",
-        input_cost_per_1k_tokens=0.01,
-        output_cost_per_1k_tokens=0.02,
         client=sdk_client,
     )
 
@@ -245,22 +213,6 @@ def test_bedrock_analyze_screen_uses_converse_image_bytes():
 
     assert response.content.startswith('{"thought": "Done"')
     assert response.usage == {"inputTokens": 10, "outputTokens": 5, "totalTokens": 15}
-    assert response.cost == {
-        "provider": "bedrock",
-        "model": "amazon.nova-lite-v1:0",
-        "currency": "USD",
-        "input_tokens": 10,
-        "output_tokens": 5,
-        "total_tokens": 15,
-        "cache_read_input_tokens": 0,
-        "cache_write_input_tokens": 0,
-        "estimated": True,
-        "input_cost_usd": 0.0001,
-        "output_cost_usd": 0.0001,
-        "total_cost_usd": 0.0002,
-        "input_cost_per_1k_tokens": 0.01,
-        "output_cost_per_1k_tokens": 0.02,
-    }
 
     request = sdk_client.converse.call_args.kwargs
     assert request["modelId"] == "amazon.nova-lite-v1:0"

@@ -5,12 +5,12 @@ from typing import Any
 
 from PIL import Image
 
-from odin.platform.macos import MacOSBackend
+from odin.platform.base import PlatformBackend, default_backend
 
 
 class Screen:
-    def __init__(self):
-        self._backend = MacOSBackend()
+    def __init__(self, backend: PlatformBackend | None = None):
+        self._backend: PlatformBackend = backend or default_backend()
         self.width, self.height = self._backend.screen_size()
 
     def get_screenshot(self) -> Image.Image:
