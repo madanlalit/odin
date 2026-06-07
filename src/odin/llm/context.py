@@ -145,6 +145,13 @@ def _format_windows(section: str, value: Any) -> list[str]:
 
 
 def _format_accessibility(data: dict[str, Any]) -> list[str]:
+    delta = data.get("delta")
+    if isinstance(delta, dict):
+        return _format_accessibility_delta(data, delta)
+    return _format_accessibility_full(data)
+
+
+def _format_accessibility_full(data: dict[str, Any]) -> list[str]:
     lines = [
         "",
         "ACCESSIBILITY:",
@@ -166,22 +173,75 @@ def _format_accessibility(data: dict[str, Any]) -> list[str]:
         )
         for element in elements:
             if isinstance(element, dict):
-                lines.append(
-                    " | ".join([
-                        _cell(element.get("id")),
-                        _cell(element.get("role")),
-                        _cell(element.get("title")),
-                        _cell(element.get("value")),
-                        _cell(element.get("description")),
-                        _cell(element.get("placeholder")),
-                        _cell(_frame(element.get("frame"))),
-                        _cell(element.get("enabled")),
-                        _cell(element.get("focused")),
-                        _cell(",".join(map(str, element.get("actions", [])))),
-                        _cell(element.get("depth")),
-                    ])
-                )
+                lines.append(_element_row(element))
     return lines
+
+
+def _format_accessibility_delta(
+    data: dict[str, Any],
+    delta: dict[str, Any],
+) -> list[str]:
+    unchanged = delta.get("unchanged") or []
+    added = delta.get("added") or []
+    changed = delta.get("changed") or []
+    removed = delta.get("removed") or []
+
+    lines = [
+        "",
+        "ACCESSIBILITY_DELTA:",
+        (
+            f"available={_scalar(data.get('available'))} "
+            f"trusted={_scalar(data.get('trusted'))} "
+            f"app={_scalar(data.get('app'))} "
+            f"window={_scalar(data.get('window'))} "
+            f"(unchanged since previous step; changed/added/removed below)"
+        ),
+    ]
+
+    if unchanged:
+        parts: list[str] = []
+        for item in unchanged:
+            if not isinstance(item, dict):
+                continue
+            element_id = _cell(item.get("id"))
+            role = _cell(item.get("role")) or "-"
+            title = _cell(item.get("title")) or "-"
+            parts.append(f"{element_id}:{role}:{title}")
+        if parts:
+            lines.append(f"UNCHANGED ({len(parts)}): {', '.join(parts)}")
+
+    for label, items in (("CHANGED", changed), ("ADDED", added)):
+        if not items:
+            continue
+        lines.append(f"{label} ({len(items)}):")
+        lines.append(
+            "id | role | title | value | desc | placeholder | frame | "
+            "enabled | focused | actions | depth"
+        )
+        for element in items:
+            if isinstance(element, dict):
+                lines.append(_element_row(element))
+
+    if removed:
+        lines.append(f"REMOVED ({len(removed)}): {', '.join(_cell(eid) for eid in removed)}")
+
+    return lines
+
+
+def _element_row(element: dict[str, Any]) -> str:
+    return " | ".join([
+        _cell(element.get("id")),
+        _cell(element.get("role")),
+        _cell(element.get("title")),
+        _cell(element.get("value")),
+        _cell(element.get("description")),
+        _cell(element.get("placeholder")),
+        _cell(_frame(element.get("frame"))),
+        _cell(element.get("enabled")),
+        _cell(element.get("focused")),
+        _cell(",".join(map(str, element.get("actions", [])))),
+        _cell(element.get("depth")),
+    ])
 
 
 def _format_extra_context(

@@ -23,6 +23,7 @@ class TraceEventKind(StrEnum):
 
     ACCESSIBILITY_CAPTURE_STARTED = "accessibility_capture_started"
     ACCESSIBILITY_CAPTURED = "accessibility_captured"
+    ACCESSIBILITY_DELTA = "accessibility_delta"
 
     MOUSE_POSITION_CAPTURED = "mouse_position_captured"
 

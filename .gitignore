@@ -29,3 +29,6 @@ wheels/
 test_original.png
 test_compressed.png
 screenshots/
+
+# Local planning / todo notes
+todo/

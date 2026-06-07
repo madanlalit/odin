@@ -58,6 +58,7 @@ class ReActLoop:
         agent._stop_requested = False
         agent.memory.clear()
         agent._llm_usage = agent._empty_llm_usage()
+        agent._previous_accessibility_snapshot = None
 
         start_time = datetime.now()
         start_perf = time.perf_counter()
@@ -113,15 +114,29 @@ class ReActLoop:
             screenshot = self._capture_screen(step)
             final_screenshot = screenshot
             accessibility_snapshot = self._capture_accessibility(step)
+            previous_accessibility_snapshot = agent._previous_accessibility_snapshot
+            used_ax_delta = self._should_use_ax_delta(
+                accessibility_snapshot, previous_accessibility_snapshot,
+            )
+            self._trace_ax_delta(
+                step,
+                accessibility_snapshot,
+                previous_accessibility_snapshot,
+                used_ax_delta,
+            )
+            agent._previous_accessibility_snapshot = accessibility_snapshot
             mouse_context = self._mouse_context(screenshot)
             agent.tracer.event(
                 TraceEventKind.MOUSE_POSITION_CAPTURED,
                 step=step,
                 data=mouse_context,
             )
+            accessibility_context = self._accessibility_context(
+                accessibility_snapshot, previous_accessibility_snapshot,
+            )
             screen_context = self._screen_context(
                 screenshot,
-                accessibility_snapshot,
+                accessibility_context,
                 mouse_context,
             )
 
@@ -628,6 +643,74 @@ class ReActLoop:
         )
         return snapshot
 
+    def _accessibility_context(
+        self,
+        snapshot: AccessibilitySnapshot,
+        previous: AccessibilitySnapshot | None,
+    ) -> dict[str, object]:
+        """Build the per-step accessibility prompt payload.
+
+        Returns a delta payload when enabled and safe, otherwise the
+        full snapshot. Falls back to full on the first step, when the
+        app/window changed, when the snapshot is unavailable, or when
+        ``ax_delta_enabled`` is ``False`` in the capture config.
+        """
+        if not self._should_use_ax_delta(snapshot, previous):
+            return snapshot.to_context()
+
+        delta = snapshot.diff(previous)
+        return snapshot.delta_context(delta)
+
+    def _should_use_ax_delta(
+        self,
+        snapshot: AccessibilitySnapshot,
+        previous: AccessibilitySnapshot | None,
+    ) -> bool:
+        """Decide whether to render a delta or a full snapshot."""
+        agent = self._agent
+        if not agent.config.capture.ax_delta_enabled:
+            return False
+        if previous is None:
+            return False
+        if not snapshot.available:
+            return False
+        if snapshot.app != previous.app:
+            return False
+        return snapshot.window == previous.window
+
+    def _trace_ax_delta(
+        self,
+        step: int,
+        snapshot: AccessibilitySnapshot,
+        previous: AccessibilitySnapshot | None,
+        used_delta: bool,
+    ) -> None:
+        """Emit a trace event recording delta/full payload sizes."""
+        agent = self._agent
+        if used_delta:
+            delta = snapshot.diff(previous)
+            data = {
+                "kind": "delta",
+                "unchanged": len(delta.unchanged),
+                "added": len(delta.added),
+                "changed": len(delta.changed),
+                "removed": len(delta.removed),
+            }
+        else:
+            data = {
+                "kind": "full",
+                "elements": len(snapshot.elements),
+                "reason": (
+                    "first_step" if previous is None
+                    else "ax_disabled" if not agent.config.capture.ax_delta_enabled
+                    else "unavailable" if not snapshot.available
+                    else "app_change" if previous and snapshot.app != previous.app
+                    else "window_change" if previous and snapshot.window != previous.window
+                    else "delta_disabled"
+                ),
+            }
+        agent.tracer.event(TraceEventKind.ACCESSIBILITY_DELTA, step=step, data=data)
+
     def _mouse_context(self, screenshot: Image.Image) -> dict[str, object]:
         agent = self._agent
         try:
@@ -654,7 +737,7 @@ class ReActLoop:
     def _screen_context(
         self,
         screenshot: Image.Image,
-        accessibility_snapshot: AccessibilitySnapshot,
+        accessibility_context: dict[str, object],
         mouse_context: dict[str, object],
     ) -> dict:
         agent = self._agent
@@ -680,7 +763,7 @@ class ReActLoop:
                 ),
             },
             "mouse": mouse_context,
-            "accessibility": accessibility_snapshot.to_context(),
+            "accessibility": accessibility_context,
             "interaction_guidance": (
                 "Prefer element actions with element_id when accessibility elements "
                 "match the target. Use raw x/y only as a fallback."

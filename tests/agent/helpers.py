@@ -36,8 +36,16 @@ def build_agent(
     screen: FakeScreen | None = None,
     accessibility: Accessibility | None = None,
     action_controller: FakeActionController | None = None,
+    capture_config: dict | None = None,
+    trace_dir=None,
 ) -> Agent:
     """Construct an agent with the given fakes and re-wire dependents."""
+    if trace_dir is not None:
+        base = config or AgentConfig()
+        config = base.model_copy(update={"trace": base.trace.model_copy(update={"path": str(trace_dir / "trace.jsonl")})})
+    if capture_config is not None:
+        base = config or AgentConfig()
+        config = base.model_copy(update={"capture": base.capture.model_copy(update=capture_config)})
     agent = Agent(
         llm,
         config=config,

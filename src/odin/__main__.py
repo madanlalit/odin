@@ -66,6 +66,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Prompt before executing every non-done action.",
     )
     parser.add_argument(
+        "--no-ax-delta",
+        action="store_true",
+        help="Disable the accessibility tree delta optimization and send the full tree each step.",
+    )
+    parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Emit debug logs to stderr.",
@@ -110,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         loop=AgentConfig().loop.model_copy(update={
             "max_steps": args.max_steps,
             "max_batch_actions": max(1, args.max_batch_actions),
+        }),
+        capture=AgentConfig().capture.model_copy(update={
+            "ax_delta_enabled": not args.no_ax_delta,
         }),
         trace=AgentConfig().trace.model_copy(update={
             "path": args.trace_path,

@@ -29,7 +29,7 @@ from odin.agent.tracing import (
 )
 from odin.agent.types import AgentResult, AgentStatus
 from odin.llm.base import LLMProvider, LLMResponse
-from odin.perception.accessibility import Accessibility
+from odin.perception.accessibility import Accessibility, AccessibilitySnapshot
 from odin.perception.processing import Processing
 from odin.perception.screen import Screen
 
@@ -55,6 +55,7 @@ class CaptureConfig(BaseModel):
     use_accessibility: bool = True
     accessibility_max_depth: int = 8
     accessibility_max_nodes: int = 120
+    ax_delta_enabled: bool = True
 
 
 class TraceConfig(BaseModel):
@@ -128,6 +129,7 @@ class Agent:
         self._action_approval_callback = action_approval_callback
         self.tracer = tracer or self._create_tracer()
         self._last_screenshot_size: tuple[int, int] | None = None
+        self._previous_accessibility_snapshot: AccessibilitySnapshot | None = None
         self._llm_usage = self._empty_llm_usage()
         self._loop: ReActLoop | None = None
 
@@ -178,6 +180,7 @@ class Agent:
                 "use_accessibility": self.config.capture.use_accessibility,
                 "accessibility_max_depth": self.config.capture.accessibility_max_depth,
                 "accessibility_max_nodes": self.config.capture.accessibility_max_nodes,
+                "ax_delta_enabled": self.config.capture.ax_delta_enabled,
             },
             "trace": {
                 "save_screenshots": self.config.trace.save_screenshots,

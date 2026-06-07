@@ -79,3 +79,44 @@ def test_format_screen_context_uses_compact_sections():
     assert "ACCESSIBILITY:" in text
     assert "ax_1 | AXWindow | Dynamic Array Code Implementation" in text
     assert '{"coordinate_system"' not in text
+
+
+def test_format_screen_context_renders_accessibility_delta():
+    """Delta payloads use the compact unchanged line plus full added/changed rows."""
+    text = format_screen_context({
+        "coordinate_system": {
+            "type": "screenshot_coordinates_for_raw_xy_actions",
+            "origin": "top_left",
+            "x_axis": "right",
+            "y_axis": "down",
+            "screenshot_size": {"width": 1800, "height": 1130},
+            "screen_size": {"width": 1800, "height": 1169},
+        },
+        "mouse": {"available": False},
+        "accessibility": {
+            "available": True,
+            "app": "Firefox",
+            "window": "Settings",
+            "delta": {
+                "unchanged": [
+                    {"id": "ax_aaa111", "role": "AXButton", "title": "Save"},
+                ],
+                "added": [
+                    {
+                        "id": "ax_bbb222",
+                        "role": "AXButton",
+                        "title": "Cancel",
+                        "depth": 1,
+                    },
+                ],
+                "changed": [],
+                "removed": ["ax_ccc333"],
+            },
+        },
+    })
+
+    assert "ACCESSIBILITY_DELTA:" in text
+    assert "UNCHANGED (1): ax_aaa111:AXButton:Save" in text
+    assert "ADDED (1):" in text
+    assert "ax_bbb222 | AXButton | Cancel" in text
+    assert "REMOVED (1): ax_ccc333" in text

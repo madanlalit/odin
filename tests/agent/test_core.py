@@ -121,7 +121,9 @@ class TestAgentScreenContext:
 
         screen_context = llm.calls[0]["screen_context"]
         assert screen_context["accessibility"]["available"] is True
-        assert screen_context["accessibility"]["elements"][0]["id"] == "ax_1"
+        first_element = screen_context["accessibility"]["elements"][0]
+        assert first_element["id"].startswith("ax_")
+        assert first_element["role"] == "AXButton"
         assert (
             screen_context["coordinate_system"]["type"]
             == "screenshot_coordinates_for_raw_xy_actions"
@@ -519,6 +521,114 @@ class TestAgentTraceRecording:
         parse_error = next(event for event in events if event["event"] == "parse_error")
         assert parse_error["step"] == 1
         assert parse_error["data"]["content"] == "not json"
+
+
+def test_ax_delta_enabled_uses_delta_payload_after_first_step(tmp_path) -> None:
+    """Step 2+ should send the delta form when the app/window are stable."""
+    snapshot_a = AccessibilitySnapshot(
+        available=True,
+        trusted=True,
+        app="Test App",
+        window="Test Window",
+        elements=[
+            AXElementInfo(id="ax_a", role="AXButton", title="OK", depth=0),
+            AXElementInfo(id="ax_b", role="AXTextField", value="hello", depth=1),
+        ],
+    )
+    snapshot_b = AccessibilitySnapshot(
+        available=True,
+        trusted=True,
+        app="Test App",
+        window="Test Window",
+        elements=[
+            AXElementInfo(id="ax_a", role="AXButton", title="OK", depth=0),
+            AXElementInfo(id="ax_b", role="AXTextField", value="world", depth=1),
+        ],
+    )
+    llm = FakeLLM([
+        _batch_response(_action(ActionKind.PRESS_ELEMENT, {"element_id": "ax_a"})),
+        _batch_response(_action(ActionKind.DONE, {"result": "ok", "success": True})),
+    ])
+    agent = build_agent(
+        llm=llm,
+        accessibility=FakeAccessibility(snapshot=[snapshot_a, snapshot_b]),
+        trace_dir=tmp_path,
+    )
+
+    result = agent.run("Delta test")
+    assert result.success is True
+
+    assert len(llm.calls) == 2
+    first_ctx = llm.calls[0]["screen_context"]
+    second_ctx = llm.calls[1]["screen_context"]
+    assert "elements" in first_ctx["accessibility"]
+    assert "delta" in second_ctx["accessibility"]
+    delta = second_ctx["accessibility"]["delta"]
+    assert "ax_a" in [item["id"] for item in delta["unchanged"]]
+    assert "ax_b" in [element["id"] for element in delta["changed"]]
+
+
+def test_ax_delta_falls_back_to_full_on_app_change(tmp_path) -> None:
+    """App change forces a full snapshot (deltas across apps are noise)."""
+    snapshot_a = AccessibilitySnapshot(
+        available=True,
+        trusted=True,
+        app="App One",
+        window="Win",
+        elements=[AXElementInfo(id="ax_a", role="AXButton", title="A", depth=0)],
+    )
+    snapshot_b = AccessibilitySnapshot(
+        available=True,
+        trusted=True,
+        app="App Two",
+        window="Win",
+        elements=[AXElementInfo(id="ax_b", role="AXButton", title="B", depth=0)],
+    )
+    llm = FakeLLM([
+        _batch_response(_action(ActionKind.PRESS_ELEMENT, {"element_id": "ax_a"})),
+        _batch_response(_action(ActionKind.DONE, {"result": "ok", "success": True})),
+    ])
+    agent = build_agent(
+        llm=llm,
+        accessibility=FakeAccessibility(snapshot=[snapshot_a, snapshot_b]),
+        trace_dir=tmp_path,
+    )
+
+    result = agent.run("App change test")
+    assert result.success is True
+
+    second_ctx = llm.calls[1]["screen_context"]
+    assert "elements" in second_ctx["accessibility"]
+    assert "delta" not in second_ctx["accessibility"]
+
+
+def test_ax_delta_disabled_via_config_uses_full_snapshots(tmp_path) -> None:
+    """ax_delta_enabled=False forces full snapshots every step."""
+    snapshot = AccessibilitySnapshot(
+        available=True,
+        trusted=True,
+        app="Test App",
+        window="Test Window",
+        elements=[AXElementInfo(id="ax_a", role="AXButton", title="OK", depth=0)],
+    )
+    llm = FakeLLM([
+        _batch_response(_action(ActionKind.PRESS_ELEMENT, {"element_id": "ax_a"})),
+        _batch_response(_action(ActionKind.DONE, {"result": "ok", "success": True})),
+    ])
+    agent = build_agent(
+        llm=llm,
+        accessibility=FakeAccessibility(snapshot=[snapshot, snapshot]),
+        trace_dir=tmp_path,
+        capture_config={"ax_delta_enabled": False},
+    )
+
+    result = agent.run("Disabled delta test")
+    assert result.success is True
+
+    for call in llm.calls:
+        ctx = call["screen_context"]
+        assert "elements" in ctx["accessibility"]
+        assert "delta" not in ctx["accessibility"]
 
 
 __all__: list[str] = []

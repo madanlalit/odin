@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
+from hashlib import sha1
 from importlib import import_module
 from typing import Any, cast
 
@@ -77,6 +79,8 @@ class AccessibilitySnapshot(BaseModel):
     elements: list[AXElementInfo] = Field(default_factory=list)
     error: str | None = None
 
+    model_config = {"arbitrary_types_allowed": True}
+
     def to_context(self) -> dict[str, Any]:
         """Convert snapshot to prompt-safe JSON."""
         data: dict[str, Any] = {
@@ -88,6 +92,101 @@ class AccessibilitySnapshot(BaseModel):
             "error": self.error,
         }
         return {key: value for key, value in data.items() if value not in (None, "", [])}
+
+    def diff(self, previous: AccessibilitySnapshot | None) -> AccessibilityDelta:
+        """Diff this snapshot against ``previous``.
+
+        ``unchanged`` and ``removed`` carry stable element IDs so the
+        model can still reference those elements in later actions.
+        ``added`` and ``changed`` carry the full :class:`AXElementInfo`
+        so the prompt can describe them. Equality is computed on the
+        full prompt-relevant payload; ``depth`` is excluded because it
+        is implied by the path-based ID.
+        """
+        if previous is None:
+            return AccessibilityDelta(
+                unchanged=[],
+                added=list(self.elements),
+                changed=[],
+                removed=[],
+                previous=None,
+            )
+
+        prev_by_id = {e.id: e for e in previous.elements}
+        curr_by_id = {e.id: e for e in self.elements}
+
+        unchanged: list[str] = []
+        added: list[AXElementInfo] = []
+        changed: list[AXElementInfo] = []
+
+        for element_id, curr in curr_by_id.items():
+            prev = prev_by_id.get(element_id)
+            if prev is None:
+                added.append(curr)
+            elif _element_payload(prev) == _element_payload(curr):
+                unchanged.append(element_id)
+            else:
+                changed.append(curr)
+
+        removed = [
+            element_id
+            for element_id in prev_by_id
+            if element_id not in curr_by_id
+        ]
+
+        return AccessibilityDelta(
+            unchanged=unchanged,
+            added=added,
+            changed=changed,
+            removed=removed,
+            previous=previous,
+        )
+
+    def delta_context(self, delta: AccessibilityDelta) -> dict[str, Any]:
+        """Return a prompt-safe dict describing this snapshot as a delta.
+
+        The model still receives every current element_id (either as
+        ``unchanged`` or as part of ``added``/``changed``) so element
+        actions continue to resolve, but only ``added``/``changed``
+        elements pay the full per-element prompt cost. ``unchanged``
+        carries a compact ``id:role:title`` reminder so the model can
+        still glance at what each stable ID refers to.
+        """
+        prev_by_id = (
+            {e.id: e for e in delta.previous.elements} if delta.previous else {}
+        )
+        unchanged_summary: list[dict[str, Any]] = []
+        for element_id in delta.unchanged:
+            info = prev_by_id.get(element_id)
+            unchanged_summary.append({
+                "id": element_id,
+                "role": info.role if info else None,
+                "title": info.title if info else None,
+            })
+
+        return {
+            "available": self.available,
+            "trusted": self.trusted,
+            "app": self.app,
+            "window": self.window,
+            "delta": {
+                "unchanged": unchanged_summary,
+                "added": [element.to_dict() for element in delta.added],
+                "changed": [element.to_dict() for element in delta.changed],
+                "removed": list(delta.removed),
+            },
+        }
+
+
+@dataclass
+class AccessibilityDelta:
+    """Result of diffing two :class:`AccessibilitySnapshot` instances."""
+
+    unchanged: list[str]
+    added: list[AXElementInfo]
+    changed: list[AXElementInfo]
+    removed: list[str]
+    previous: AccessibilitySnapshot | None = None
 
 
 class Accessibility:
@@ -292,18 +391,28 @@ class Accessibility:
     def _walk(self, root: Any, *, max_depth: int, max_nodes: int) -> list[AXElementInfo]:
         """Flatten the accessibility tree into a compact element list."""
         elements: list[AXElementInfo] = []
-        stack: list[tuple[Any, int]] = [(root, 0)]
+        stack: list[tuple[Any, int, tuple[tuple[str, str, str], ...], int]] = [(root, 0, (), 0)]
         seen: set[int] = set()
+        sibling_counts: dict[int, dict[tuple[str, str], int]] = {}
 
         while stack and len(elements) < max_nodes:
-            element, depth = stack.pop()
+            element, depth, path, parent_key = stack.pop()
             element_key = id(element)
             if element_key in seen:
                 continue
             seen.add(element_key)
 
-            element_id = f"ax_{len(elements) + 1}"
-            info = self._element_info(element_id, element, depth)
+            role, title = self._path_role_title(element)
+            if parent_key not in sibling_counts:
+                sibling_counts[parent_key] = {}
+            counts = sibling_counts[parent_key]
+            key = (role or "", title or "")
+            sibling_idx = counts.get(key, 0)
+            counts[key] = sibling_idx + 1
+
+            current_path = (*path, (role or "", title or "", str(sibling_idx)))
+            element_id = _stable_element_id(current_path)
+            info = self._element_info(element_id, element, depth, role=role, title=title)
             if self._is_interesting(info):
                 self._elements_by_id[element_id] = element
                 self._info_by_id[element_id] = info
@@ -314,18 +423,50 @@ class Accessibility:
 
             children = self._children(element)
             for child in reversed(children):
-                stack.append((child, depth + 1))
+                stack.append((child, depth + 1, current_path, element_key))
 
         return elements
 
-    def _element_info(self, element_id: str, element: Any, depth: int) -> AXElementInfo:
+    def _path_role_title(
+        self,
+        element: Any,
+    ) -> tuple[str | None, str | None]:
+        """Read role/title and return them.
+
+        Reads the role/title once and returns them so ``_element_info``
+        can reuse the same values without a second AX round-trip.
+        """
+        ax = self._load_ax()
+        role = (
+            _stringify(self._copy_attr(element, ax.kAXRoleAttribute))
+            if ax is not None
+            else None
+        )
+        title = (
+            _truncate(_stringify(self._copy_attr(element, ax.kAXTitleAttribute)))
+            if ax is not None
+            else None
+        )
+        return role, title
+
+    def _element_info(
+        self,
+        element_id: str,
+        element: Any,
+        depth: int,
+        *,
+        role: str | None = None,
+        title: str | None = None,
+    ) -> AXElementInfo:
         """Extract prompt-safe info from an AXUIElement."""
         ax = self._load_ax()
         if ax is None:
             return AXElementInfo(id=element_id, depth=depth)
 
-        role = _stringify(self._copy_attr(element, ax.kAXRoleAttribute))
-        title = _truncate(_stringify(self._copy_attr(element, ax.kAXTitleAttribute)))
+        if role is None:
+            role = _stringify(self._copy_attr(element, ax.kAXRoleAttribute))
+        if title is None:
+            title = _truncate(_stringify(self._copy_attr(element, ax.kAXTitleAttribute)))
         value = _truncate(_stringify(self._copy_attr(element, ax.kAXValueAttribute)))
         description = _truncate(
             _stringify(self._copy_attr(element, ax.kAXDescriptionAttribute))
@@ -543,3 +684,41 @@ def _bool_or_none(value: Any) -> bool | None:
     if value is None:
         return None
     return bool(value)
+
+
+def _stable_element_id(path: tuple[tuple[str, str, str], ...]) -> str:
+    """Compute a content+path based stable element ID.
+
+    The ID is a 10-character hex prefix of a SHA-1 over the
+    ``(role, title, sibling_idx)`` tuples from the root of the tree to this
+    element. Using the full path (not just role+title) avoids ID
+    collisions when two unrelated elements share the same role+title
+    at different positions in the tree, and using SHA-1 keeps the
+    string short enough to fit comfortably in the prompt while still
+    being effectively collision-free for the small trees the agent
+    sees in practice.
+    """
+    encoded = "\x1f".join(
+        f"{role or ''}\x1f{title or ''}\x1f{sibling_idx}" for role, title, sibling_idx in path
+    ).encode("utf-8")
+    return f"ax_{sha1(encoded).hexdigest()[:10]}"
+
+
+def _element_payload(info: AXElementInfo) -> tuple[Any, ...]:
+    """Return the tuple of fields used for change detection.
+
+    Excludes ``depth`` (implied by the path-based stable ID) and
+    ``id`` (the identity we're diffing on).
+    """
+    frame = info.frame.to_dict() if info.frame is not None else None
+    return (
+        info.role,
+        info.title,
+        info.value,
+        info.description,
+        info.placeholder,
+        frame,
+        info.enabled,
+        info.focused,
+        list(info.actions),
+    )

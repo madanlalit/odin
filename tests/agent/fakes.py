@@ -111,8 +111,17 @@ class FakeScreen:
 class FakeAccessibility:
     """Returns a pre-canned accessibility snapshot and records AX calls."""
 
-    def __init__(self, snapshot: AccessibilitySnapshot | None = None) -> None:
-        self.snapshot = snapshot or AccessibilitySnapshot(available=False)
+    def __init__(
+        self,
+        snapshot: AccessibilitySnapshot | list[AccessibilitySnapshot] | None = None,
+    ) -> None:
+        if snapshot is None:
+            self._snapshots: list[AccessibilitySnapshot] = [AccessibilitySnapshot(available=False)]
+        elif isinstance(snapshot, list):
+            self._snapshots = list(snapshot)
+        else:
+            self._snapshots = [snapshot]
+        self.snapshot = self._snapshots[0]
         self.capture_calls = 0
         self.performed_actions: list[tuple[str, str]] = []
         self.focused: list[str] = []
@@ -121,7 +130,9 @@ class FakeAccessibility:
 
     def capture(self, *, max_depth: int, max_nodes: int) -> AccessibilitySnapshot:  # noqa: ARG002
         self.capture_calls += 1
-        return self.snapshot
+        if len(self._snapshots) == 1:
+            return self._snapshots[0]
+        return self._snapshots.pop(0)
 
     def perform_action(self, element_id: str, action_name: str) -> tuple[bool, str]:
         self.performed_actions.append((element_id, action_name))
